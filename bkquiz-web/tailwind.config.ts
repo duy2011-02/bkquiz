@@ -12,69 +12,53 @@ const config: Config = {
     extend: {
       colors: {
         /* =========================
-           Background Layers
+           Chalkboard palette
+           Source: attempt/[attemptId]/chalkboard.module.css
+           Values live as CSS variables in src/styles/global.css
         ========================= */
-        bg: {
-          // Charcoal neutral – gần với swatch bạn gửi
-          page: '#101010',
-          section: '#141414',
-          card: '#181818',
-          cardHover: '#202020',
-          // Alias cho spec `bg-bg-elevated` và `bg-bg-hover`
-          elevated: '#202020',
-          hover: '#202020',
+        chalk: {
+          DEFAULT: 'var(--chalk)',
+          dim: 'var(--chalk-dim)',
+          faint: 'var(--chalk-faint)',
+          yellow: 'var(--chalk-yellow)',
+          pink: 'var(--chalk-pink)',
+          green: 'var(--chalk-green)',
+          blue: 'var(--chalk-blue)',
         },
-
-        /* =========================
-           Text System
-        ========================= */
-        text: {
-          heading: '#F5F6FA',
-          body: '#CFD3E1',
-          muted: '#9AA1B5',
-          disabled: '#6B728A',
-          // Alias cho spec `text-text-base`
-          base: '#CFD3E1',
-          // Text trên primary CTA
-          onPrimary: '#05060E',
+        board: {
+          DEFAULT: 'var(--board)',
+          dark: 'var(--board-dark)',
         },
-
-        /* =========================
-           Primary / Accent
-           (BKquiz: CTA cam, outline charcoal)
-        ========================= */
-        primary: {
-          DEFAULT: '#FF5A00', // Solid orange CTA
-          hover: '#FF6A1A',
-          active: '#E64900',
-          subtle: 'rgba(255,90,0,0.14)',
+        wood: {
+          DEFAULT: 'var(--wood)',
+          dark: 'var(--wood-dark)',
         },
-
-        accent: {
-          silver: '#E6EAF2',
+        wall: {
+          DEFAULT: 'var(--wall)',
+          stripe: 'var(--wall-stripe)',
         },
-
-        /* =========================
-           Semantic Colors
-        ========================= */
-        success: '#3FD1A2',
-        warning: '#F0B45A',
-        danger: '#E05A6F',
-
-        /* =========================
-           Borders & Dividers
-        ========================= */
-        border: {
-          subtle: 'rgba(255,255,255,0.06)',
-          strong: 'rgba(255,255,255,0.12)',
+        paper: {
+          DEFAULT: 'var(--paper)',
+          ink: 'var(--ink-paper)',
+        },
+        ink: {
+          wood: 'var(--ink-wood)',
+          'on-yellow': 'var(--ink-on-yellow)',
         },
       },
 
       /* =========================
          Typography
+         chalk  = Patrick Hand (everything written on the board)
+         script = Dancing Script (page titles, big numbers)
+         sans   = Inter (data tables, inputs, long teacher-side text)
+         mono   = JetBrains Mono (class codes, tokens, IDs)
       ========================= */
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+        chalk: ['var(--font-chalk)', '\'Comic Sans MS\'', 'cursive'],
+        script: ['var(--font-chalk-script)', 'var(--font-chalk)', 'cursive'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
 
       fontSize: {
@@ -125,10 +109,8 @@ const config: Config = {
          Shadows (Framer-style depth)
       ========================= */
       boxShadow: {
-        card: '0 0 0 1px rgba(255,255,255,0.03), 0 12px 24px rgba(0,0,0,0.4)',
-        hover:
-          '0 0 0 1px rgba(255,255,255,0.06), 0 16px 32px rgba(0,0,0,0.45)',
-        focus: '0 0 0 2px rgba(91,124,250,0.6)',
+        // .tokenInput:focus ring (chalk on a board casts no drop shadow)
+        focus: '0 0 0 4px rgba(246,226,127,0.35)',
       },
 
       /* =========================
@@ -152,9 +134,10 @@ const config: Config = {
         dropdown: 10,
         sticky: 20,
         overlay: 30,
-        modal: 40,
-        popover: 50,
-        tooltip: 60,
+        sidebar: 50,
+        modal: 60, // .overlay in chalkboard.module.css
+        popover: 64,
+        tooltip: 66,
         toast: 70,
       },
 

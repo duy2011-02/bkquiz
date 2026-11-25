@@ -20,6 +20,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'CLASS_NOT_FOUND' }, { status: 404 });
   }
 
+  // Thành viên bị chủ lớp chặn không tự join lại được (chủ lớp có thể thêm lại bằng email)
+  const existing = await prisma.classMembership.findUnique({
+    where: { classroomId_userId: { classroomId: classroom.id, userId } },
+    select: { status: true },
+  });
+  if (existing?.status === 'banned') {
+    return NextResponse.json({ error: 'CLASS_BANNED' }, { status: 403 });
+  }
+
   await prisma.classMembership.upsert({
     where: {
       classroomId_userId: { classroomId: classroom.id, userId },

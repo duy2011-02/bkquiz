@@ -1,15 +1,18 @@
 'use client';
 
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import s from '@/components/chalk/chalk.module.css';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { TagFilter } from '@/components/ui/TagFilter';
 import { Toast } from '@/components/ui/Toast';
+import { cn } from '@/utils/cn';
 
 type ClassroomLite = {
   id: string;
@@ -52,7 +55,9 @@ export function ClassesPanel(props: ClassesPanelProps) {
 
   // Parse tag filter thành array
   const activeFilterTags = useMemo(() => {
-    if (!tagFilter.trim()) return [];
+    if (!tagFilter.trim()) {
+      return [];
+    }
     return tagFilter.split(',').map(t => t.trim()).filter(Boolean);
   }, [tagFilter]);
 
@@ -91,7 +96,7 @@ export function ClassesPanel(props: ClassesPanelProps) {
     }
     try {
       const res = await fetch(url.toString(), { method: 'GET' });
-    if (!res.ok) {
+      if (!res.ok) {
         const text = await res.text();
         let json: { classes?: ClassroomLite[]; error?: string };
         try {
@@ -100,9 +105,9 @@ export function ClassesPanel(props: ClassesPanelProps) {
           setError(`LOAD_FAILED: ${res.status} ${res.statusText}`);
           return;
         }
-      setError(json.error ?? 'LOAD_FAILED');
-      return;
-    }
+        setError(json.error ?? 'LOAD_FAILED');
+        return;
+      }
       const text = await res.text();
       if (!text) {
         setError('LOAD_FAILED: Empty response');
@@ -116,8 +121,8 @@ export function ClassesPanel(props: ClassesPanelProps) {
         console.error('Failed to parse response:', text, err);
         return;
       }
-    setError(null);
-    setClasses(json.classes ?? []);
+      setError(null);
+      setClasses(json.classes ?? []);
     } catch (err) {
       setError(`LOAD_FAILED: ${err instanceof Error ? err.message : String(err)}`);
       console.error('Error loading classes:', err);
@@ -158,7 +163,7 @@ export function ClassesPanel(props: ClassesPanelProps) {
   async function joinClass(code?: string) {
     const codeToJoin = code || joinCode.trim();
     if (codeToJoin.length === 0) {
-      setError('Vui lòng nhập class code');
+      setError(t('please_enter_class_code'));
       return;
     }
     setBusy(true);
@@ -183,7 +188,7 @@ export function ClassesPanel(props: ClassesPanelProps) {
         return;
       }
       if (!res.ok || !json.id) {
-        setError(json.error ?? 'JOIN_FAILED');
+        setError(json.error === 'CLASS_BANNED' ? t('class_banned') : (json.error ?? 'JOIN_FAILED'));
         return;
       }
       setJoinCode('');
@@ -269,16 +274,16 @@ export function ClassesPanel(props: ClassesPanelProps) {
   return (
     <div className="space-y-7">
       {/* Breadcrumb */}
-      <nav className="text-sm animate-fadeIn">
-        <div className="flex items-center gap-2 text-text-muted">
-          <Link href="/dashboard" className="hover:text-text-heading transition-colors">
+      <nav className="text-base">
+        <div className="flex items-center gap-2 text-chalk-dim">
+          <Link href="/dashboard" className="transition-colors hover:text-chalk">
             Dashboard
           </Link>
           <span>·</span>
-          <span className="text-text-heading">Classes</span>
+          <span className="text-chalk">Classes</span>
           <Badge
             variant={role === 'teacher' ? 'success' : 'info'}
-            className="text-[10px] px-1.5 py-0.5 ml-2"
+            className="ml-2 px-1.5 py-0.5 text-sm"
           >
             {role === 'teacher' ? 'Teacher' : 'Student'}
           </Badge>
@@ -286,11 +291,11 @@ export function ClassesPanel(props: ClassesPanelProps) {
       </nav>
 
       {/* Header */}
-      <Card className="p-5 md:p-6 animate-slideUp">
+      <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-text-heading">Classes</h1>
-            <div className="mt-1 text-sm text-text-muted">
+            <h1 className="font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">Classes</h1>
+            <div className="mt-1 text-base text-chalk-dim">
               {role === 'teacher'
                 ? t('manage_your_classes')
                 : t('classes_you_joined')}
@@ -301,17 +306,17 @@ export function ClassesPanel(props: ClassesPanelProps) {
         {role === 'teacher'
           ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <label className="grid gap-1 text-sm" htmlFor="newClassName">
-                  <div className="font-medium text-text-muted">{t('create_new_class')}</div>
+                <label className="grid gap-1 text-base" htmlFor="newClassName">
+                  <div className="font-medium text-chalk-dim">{t('create_new_class')}</div>
                   <div className="flex gap-2">
                     <Input
                       id="newClassName"
                       className="w-full"
-                      placeholder="VD: Toán 10A"
+                      placeholder={t('class_name_placeholder')}
                       value={newClassName}
                       onChange={e => setNewClassName(e.target.value)}
                       disabled={busy}
-                      onKeyDown={e => {
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           void createClass();
                         }
@@ -321,24 +326,24 @@ export function ClassesPanel(props: ClassesPanelProps) {
                       variant="primary"
                       disabled={busy || newClassName.trim().length === 0}
                       onClick={() => void createClass()}
-                      className="hover:scale-105"
+                      className=""
                     >
-                      Tạo
+                      {t('create')}
                     </Button>
                   </div>
                 </label>
 
-                <label className="grid gap-1 text-sm" htmlFor="joinCode">
-                  <div className="font-medium text-text-muted">{t('join_class_by_code')}</div>
+                <label className="grid gap-1 text-base" htmlFor="joinCode">
+                  <div className="font-medium text-chalk-dim">{t('join_class_by_code')}</div>
                   <div className="flex gap-2">
                     <Input
                       id="joinCode"
                       className="w-full"
-                      placeholder="VD: ABC123"
+                      placeholder={t('class_code_placeholder')}
                       value={joinCode}
                       onChange={e => setJoinCode(e.target.value.toUpperCase())}
                       disabled={busy}
-                      onKeyDown={e => {
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           void joinClass();
                         }
@@ -348,7 +353,7 @@ export function ClassesPanel(props: ClassesPanelProps) {
                       variant="ghost"
                       disabled={busy || joinCode.trim().length === 0}
                       onClick={() => void joinClass()}
-                      className="hover:scale-105"
+                      className=""
                     >
                       Join
                     </Button>
@@ -358,17 +363,17 @@ export function ClassesPanel(props: ClassesPanelProps) {
             )
           : (
               <div className="mt-4">
-                <label className="grid gap-1 text-sm" htmlFor="joinCode">
-                  <div className="font-medium text-text-muted">{t('join_class_by_code')}</div>
+                <label className="grid gap-1 text-base" htmlFor="joinCode">
+                  <div className="font-medium text-chalk-dim">{t('join_class_by_code')}</div>
                   <div className="flex gap-2">
                     <Input
                       id="joinCode"
                       className="w-full"
-                      placeholder="VD: ABC123"
+                      placeholder={t('class_code_placeholder')}
                       value={joinCode}
                       onChange={e => setJoinCode(e.target.value.toUpperCase())}
                       disabled={busy}
-                      onKeyDown={e => {
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           void joinClass();
                         }
@@ -378,7 +383,7 @@ export function ClassesPanel(props: ClassesPanelProps) {
                       variant="primary"
                       disabled={busy || joinCode.trim().length === 0}
                       onClick={() => void joinClass()}
-                      className="bg-indigo-500 hover:bg-indigo-600 hover:scale-105"
+
                     >
                       Join
                     </Button>
@@ -389,7 +394,7 @@ export function ClassesPanel(props: ClassesPanelProps) {
 
         {error
           ? (
-              <div className="mt-3 rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="mt-3 rounded-hand border border-chalk-pink/40 bg-chalk-pink/10 p-3 text-base text-chalk-pink">
                 {error}
               </div>
             )
@@ -398,35 +403,35 @@ export function ClassesPanel(props: ClassesPanelProps) {
 
       {/* Stats Cards */}
       {classes.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-3 animate-slideUp" style={{ animationDelay: '50ms' }}>
-          <Card className="p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg">
-            <div className="text-xs text-text-muted">{t('total_classes')}</div>
-            <div className="mt-1 text-2xl font-semibold text-text-heading">{stats.total}</div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="p-4 transition-all duration-200">
+            <div className="text-sm text-chalk-dim">{t('total_classes')}</div>
+            <div className="mt-1 text-2xl font-semibold text-chalk">{stats.total}</div>
           </Card>
           {role === 'teacher'
             ? (
                 <>
-                  <Card className="p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg">
-                    <div className="text-xs text-text-muted">Lớp bạn tạo</div>
-                    <div className="mt-1 text-2xl font-semibold text-text-heading">{stats.owned}</div>
+                  <Card className="p-4 transition-all duration-200">
+                    <div className="text-sm text-chalk-dim">{t('classes_owned')}</div>
+                    <div className="mt-1 text-2xl font-semibold text-chalk">{stats.owned}</div>
                   </Card>
-                  <Card className="p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg">
-                    <div className="text-xs text-text-muted">Lớp đã join</div>
-                    <div className="mt-1 text-2xl font-semibold text-text-heading">{stats.joined}</div>
+                  <Card className="p-4 transition-all duration-200">
+                    <div className="text-sm text-chalk-dim">{t('classes_joined')}</div>
+                    <div className="mt-1 text-2xl font-semibold text-chalk">{stats.joined}</div>
                   </Card>
                 </>
               )
             : (
                 <>
-                  <Card className="p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg border-indigo-500/20">
-                    <div className="text-xs text-text-muted">Active Sessions</div>
-                    <div className="mt-1 text-2xl font-semibold text-indigo-400">
+                  <Card className="border-chalk-blue/20 p-4 transition-all duration-200">
+                    <div className="text-sm text-chalk-dim">Active Sessions</div>
+                    <div className="mt-1 text-2xl font-semibold text-chalk-blue">
                       {classes.filter(c => c.roleInClass !== 'teacher').length}
                     </div>
                   </Card>
-                  <Card className="p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg border-indigo-500/20">
-                    <div className="text-xs text-text-muted">Total Members</div>
-                    <div className="mt-1 text-2xl font-semibold text-indigo-400">
+                  <Card className="border-chalk-blue/20 p-4 transition-all duration-200">
+                    <div className="text-sm text-chalk-dim">Total Members</div>
+                    <div className="mt-1 text-2xl font-semibold text-chalk-blue">
                       {classes.reduce((sum, c) => sum + c.memberCount, 0)}
                     </div>
                   </Card>
@@ -445,13 +450,13 @@ export function ClassesPanel(props: ClassesPanelProps) {
       </Card>
 
       {/* Classes List */}
-      <Card className="p-5 md:p-6 animate-slideUp" style={{ animationDelay: '100ms' }}>
+      <Card className="p-5 md:p-6">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-lg font-semibold text-text-heading">
+            <div className="text-lg font-semibold text-chalk">
               {t('my_classes')}
             </div>
-            <div className="mt-1 text-sm text-text-muted">
+            <div className="mt-1 text-base text-chalk-dim">
               {t('classes_count', { count: classes.length })}
             </div>
           </div>
@@ -459,11 +464,11 @@ export function ClassesPanel(props: ClassesPanelProps) {
 
         {classes.length === 0
           ? (
-              <div className="mt-6 rounded-md border border-dashed border-border-subtle px-4 py-8 text-center">
-                <div className="text-sm text-text-muted">
+              <div className="mt-6 rounded-hand border border-dashed border-chalk-faint px-4 py-8 text-center">
+                <div className="text-base text-chalk-dim">
                   {t('no_classes_yet')}
                 </div>
-                <div className="mt-2 text-xs text-text-muted">
+                <div className="mt-2 text-sm text-chalk-dim">
                   {role === 'teacher'
                     ? t('create_or_join_hint_teacher')
                     : t('create_or_join_hint_student')}
@@ -475,17 +480,15 @@ export function ClassesPanel(props: ClassesPanelProps) {
                 {classes.map((c, idx) => (
                   <Link key={c.id} href={`/dashboard/classes/${c.id}`}>
                     <div
-                      className="rounded-md border border-border-subtle bg-bg-section transition-all duration-200 hover:translate-x-1 hover:shadow-md hover:border-primary/30"
+                      className="rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
                       style={{ animationDelay: `${idx * 30}ms` }}
                     >
                       <div className="flex items-center justify-between gap-4 px-4 py-3">
                         <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_auto_auto] items-center gap-4 md:grid-cols-[2fr_auto_120px_100px]">
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-text-heading">{c.name}</div>
-                            <div className="mt-1 text-xs text-text-muted">
-                              {c.memberCount}
-                              {' '}
-                              thành viên
+                            <div className="truncate text-base font-medium text-chalk">{c.name}</div>
+                            <div className="mt-1 text-sm text-chalk-dim">
+                              {t('member_count', { count: c.memberCount })}
                             </div>
                           </div>
                           {c.tags && c.tags.length > 0 && (
@@ -496,10 +499,10 @@ export function ClassesPanel(props: ClassesPanelProps) {
                                   <Badge
                                     key={tag.id}
                                     variant={isSelected ? 'info' : 'neutral'}
-                                    className={`text-xs cursor-pointer transition-colors ${
+                                    className={`cursor-pointer text-sm transition-colors ${
                                       isSelected
-                                        ? 'bg-primary/20 border-primary/40 hover:bg-primary/30'
-                                        : 'hover:bg-primary/10'
+                                        ? 'border-chalk-yellow/40 bg-chalk-yellow/20 hover:bg-chalk-yellow/30'
+                                        : 'hover:bg-chalk-yellow/10'
                                     }`}
                                     onClick={(e) => {
                                       e.preventDefault();
@@ -521,7 +524,7 @@ export function ClassesPanel(props: ClassesPanelProps) {
                                 );
                               })}
                               {c.tags.length > 5 && (
-                                <Badge variant="neutral" className="text-xs">
+                                <Badge variant="neutral" className="text-sm">
                                   +
                                   {c.tags.length - 5}
                                 </Badge>
@@ -530,16 +533,16 @@ export function ClassesPanel(props: ClassesPanelProps) {
                           )}
                           <Badge
                             variant={c.roleInClass === 'teacher' ? 'success' : (c.roleInClass === 'ta' ? 'info' : 'neutral')}
-                            className="text-xs"
+                            className="text-sm"
                           >
                             {c.roleInClass === 'teacher' ? 'Owner' : (c.roleInClass === 'ta' ? 'TA' : 'Student')}
                           </Badge>
-                          <div className="text-xs text-text-muted">
+                          <div className="text-sm text-chalk-dim">
                             <span className="font-mono">{c.classCode}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-text-muted">→</span>
+                          <span className="text-sm text-chalk-dim">→</span>
                         </div>
                       </div>
                     </div>
@@ -550,67 +553,50 @@ export function ClassesPanel(props: ClassesPanelProps) {
       </Card>
 
       {/* Join Confirmation Modal */}
-      {showJoinModal && classPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-md p-6 animate-slideUp">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold text-text-heading mb-2">
-                {t('confirm_join_class')}
-              </h2>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <div className="text-text-muted">{t('class_name')}</div>
-                  <div className="font-semibold text-text-heading">{classPreview.name}</div>
-                </div>
-                <div>
-                  <div className="text-text-muted">{t('class_code')}</div>
-                  <div className="font-mono font-semibold text-text-heading">{classPreview.classCode}</div>
-                </div>
-                <div>
-                  <div className="text-text-muted">Giảng viên:</div>
-                  <div className="font-semibold text-text-heading">
-                    {classPreview.ownerTeacher.name || classPreview.ownerTeacher.email || 'N/A'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-text-muted">Số thành viên:</div>
-                  <div className="font-semibold text-text-heading">{classPreview.memberCount}</div>
-                </div>
-              </div>
+      <Modal
+        open={showJoinModal && !!classPreview}
+        onClose={handleCancelJoin}
+        dismissible={!busy}
+        title={t('confirm_join_class')}
+        footer={(
+          <>
+            <Button onClick={handleCancelJoin} disabled={busy}>
+              {t('cancel')}
+            </Button>
+            <Button variant="solid" onClick={() => void handleConfirmJoin()} loading={busy}>
+              {busy ? t('joining') : t('confirm_join')}
+            </Button>
+          </>
+        )}
+      >
+        {classPreview && (
+          <>
+            <div className={s.row}>
+              <span className={s.dim}>{t('class_name')}</span>
+              <span className={cn(s.chalk, 'text-right')}>{classPreview.name}</span>
             </div>
-            <div className="flex gap-3">
-              <Button
-                variant="ghost"
-                className="flex-1"
-                onClick={handleCancelJoin}
-                disabled={busy}
-              >
-                Hủy
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1 bg-indigo-500 hover:bg-indigo-600"
-                onClick={() => void handleConfirmJoin()}
-                disabled={busy}
-              >
-                {busy ? 'Đang tham gia...' : 'Đồng ý tham gia'}
-              </Button>
+            <div className={s.row}>
+              <span className={s.dim}>{t('class_code')}</span>
+              <span className={cn(s.yellow, 'font-mono')}>{classPreview.classCode}</span>
             </div>
-          </Card>
-        </div>
-      )}
+            <div className={s.row}>
+              <span className={s.dim}>{t('teacher_label')}</span>
+              <span className={cn(s.chalk, 'text-right')}>
+                {classPreview.ownerTeacher.name || classPreview.ownerTeacher.email || 'N/A'}
+              </span>
+            </div>
+            <div className={s.row}>
+              <span className={s.dim}>{t('member_count_label')}</span>
+              <span className={s.green}>{classPreview.memberCount}</span>
+            </div>
+          </>
+        )}
+      </Modal>
 
-      {/* Loading overlay when fetching preview */}
-      {loadingPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <Card className="p-6">
-            <div className="text-center">
-              <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <div className="text-sm text-text-muted">{t('loading_class_info')}</div>
-            </div>
-          </Card>
-        </div>
-      )}
+      {/* Loading state while fetching the class preview */}
+      <Modal open={loadingPreview} dismissible={false} size="sm" title={t('loading_class_info')}>
+        <div className={cn(s.progressTrack, 'bk-skeleton')} />
+      </Modal>
 
       {/* Toast Notification */}
       {toast && (

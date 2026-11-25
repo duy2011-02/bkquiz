@@ -2,21 +2,29 @@
 
 import type { ChangeEventHandler } from 'react';
 import { useState } from 'react';
+import s from '@/components/chalk/chalk.module.css';
+import { cn } from '@/utils/cn';
 
 type RoleSwitcherProps = {
   currentRole: 'teacher' | 'student';
   availableRoles?: ('teacher' | 'student')[]; // Giữ để tương thích, nhưng không dùng nữa
+  label: string;
+  teacherLabel: string;
+  studentLabel: string;
 };
-
-const DEFAULT_ROLES: Array<{ value: 'teacher' | 'student'; label: string }> = [
-  { value: 'teacher', label: 'Teacher' },
-  { value: 'student', label: 'Student' },
-];
 
 export function RoleSwitcher({
   currentRole,
+  label,
+  teacherLabel,
+  studentLabel,
 }: RoleSwitcherProps) {
   const [isLoading, setIsLoading] = useState(false);
+
+  const roles: Array<{ value: 'teacher' | 'student'; label: string }> = [
+    { value: 'teacher', label: teacherLabel },
+    { value: 'student', label: studentLabel },
+  ];
 
   const handleChange: ChangeEventHandler<HTMLSelectElement> = async (event) => {
     const newRole = event.target.value as 'teacher' | 'student';
@@ -56,14 +64,11 @@ export function RoleSwitcher({
       defaultValue={currentRole}
       onChange={handleChange}
       disabled={isLoading}
-      className={`rounded-md border border-border-subtle bg-bg-section px-2.5 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 ${
-        currentRole === 'teacher'
-          ? 'text-orange-500'
-          : 'text-indigo-400'
-      }`}
-      aria-label="role-switcher"
+      className={cn(s.btn, s.ledgeBtn)}
+      aria-label={label}
+      title={label}
     >
-      {DEFAULT_ROLES.map(role => (
+      {roles.map(role => (
         <option key={role.value} value={role.value}>
           {role.label}
         </option>

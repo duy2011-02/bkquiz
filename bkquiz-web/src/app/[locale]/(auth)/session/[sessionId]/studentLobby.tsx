@@ -4,8 +4,9 @@ import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import s from '@/components/chalk/chalk.module.css';
+import { ChalkRoom } from '@/components/chalk/ChalkRoom';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/utils/cn';
 import { getI18nPath } from '@/utils/Helpers';
@@ -145,337 +146,165 @@ export function Lobby(props: { sessionId: string }) {
     return formatDuration(data.createdAt, locale);
   }, [data, locale]);
 
+  const backLink = (
+    <Link href={getI18nPath('/dashboard', locale)} className={cn(s.btn, s.ledgeBtn)}>
+      {`← ${t('breadcrumb_dashboard')}`}
+    </Link>
+  );
+
   if (error) {
     return (
-      <Card className="p-6">
-        <div className="text-lg font-semibold">{t('cannot_access_session')}</div>
-        <div className="mt-2 text-sm text-danger">{error}</div>
-      </Card>
+      <ChalkRoom lockViewport ledge={backLink}>
+        <h1 className={cn(s.title, s.script, s.chalk)}>{t('cannot_access_session')}</h1>
+        <div className={cn(s.note, s.pink, 'self-start')} role="alert">{error}</div>
+      </ChalkRoom>
     );
   }
 
   if (!data) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-32 w-full" />
-      </div>
+      <ChalkRoom lockViewport ledge={backLink}>
+        <Skeleton className="h-10 w-2/3 max-w-md" />
+        <Skeleton className="h-4 w-1/2 max-w-sm" />
+        <Skeleton className="mx-auto mt-10 h-40 w-full max-w-xl" />
+      </ChalkRoom>
     );
   }
 
+  const noteHeading = cn(s.script, 'text-[1.8rem] leading-tight font-bold');
+
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <ChalkRoom lockViewport ledge={backLink}>
       {/* Breadcrumb */}
-      <div className="flex items-center gap-1 text-xs text-text-muted">
-        <Link
-          href={getI18nPath('/dashboard', locale)}
-          className="hover:text-text-heading transition-colors"
-        >
+      <nav aria-label={t('breadcrumb_label')} className={cn(s.dim, 'flex flex-wrap items-center gap-2')}>
+        <Link href={getI18nPath('/dashboard', locale)} className="hover:text-chalk">
           {t('breadcrumb_dashboard')}
         </Link>
-        <span>/</span>
-        <Link
-          href={getI18nPath(`/dashboard/classes/${data.classroom.id}`, locale)}
-          className="hover:text-text-heading transition-colors"
-        >
+        <span aria-hidden="true">/</span>
+        <Link href={getI18nPath(`/dashboard/classes/${data.classroom.id}`, locale)} className="hover:text-chalk">
           {data.classroom.name}
         </Link>
-        <span>/</span>
-        <span className="text-text-muted">{t('breadcrumb_session')}</span>
-      </div>
+        <span aria-hidden="true">/</span>
+        <span>{t('breadcrumb_session')}</span>
+      </nav>
 
-      {/* Session Info Card */}
-      <Card className="p-6 border-indigo-500/30 animate-slideUp">
-        <div className="mb-4">
-          <div className="text-xl font-semibold text-text-heading">{data.sessionName || data.quiz.title}</div>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-text-muted">
+      {/* Session header */}
+      <header className={s.header}>
+        <div className="min-w-0 flex-1">
+          <h1 className={cn(s.title, s.script, s.chalk)}>{data.sessionName || data.quiz.title}</h1>
+          <div className={cn(s.meta, s.dim, 'mt-1')}>
             <span>
               {t('class')}
               {' '}
-              <span className="font-semibold text-text-body">{data.classroom.name}</span>
+              <span className={s.chalk}>{data.classroom.name}</span>
             </span>
-            <span>·</span>
             <span>
               {t('class_code')}
               {' '}
-              <span className="font-mono font-semibold text-text-body">{data.classroom.classCode}</span>
+              <span className={cn(s.yellow, 'font-mono')}>{data.classroom.classCode}</span>
             </span>
-            <span>·</span>
             <span>
               {t('teacher')}
               {' '}
-              <span className="font-semibold text-text-body">{data.quiz.createdBy.name}</span>
+              <span className={s.chalk}>{data.quiz.createdBy.name}</span>
             </span>
           </div>
         </div>
-      </Card>
+      </header>
 
-      {data.status === 'lobby'
-        ? (
-            <Card className="p-8 border-indigo-500/40 bg-indigo-500/5 animate-slideUp" style={{ animationDelay: '50ms' }}>
-              <div className="flex flex-col items-center text-center">
-                {data.attemptId
-                  ? (
-                      // Đã join, đang chờ teacher bắt đầu
-                      <>
-                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-500/20">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="32"
-                            height="32"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="animate-spin text-indigo-400"
-                          >
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                          </svg>
-                        </div>
-                        <div className="text-xl font-semibold text-text-heading mb-2">{t('joined_waiting')}</div>
-                        <div className="text-sm text-text-body mb-4">
-                          {t('auto_redirect_hint')}
-                        </div>
-                        {waitDuration
-                          ? (
-                              <div className="text-xs text-text-muted">
-                                {t('waited')}
-                                {' '}
-                                <span className="font-mono font-semibold">{waitDuration}</span>
-                              </div>
-                            )
-                          : null}
-                      </>
-                    )
-                  : (
-                      // Chưa join, cần bấm nút join
-                      <>
-                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-500/20">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="32"
-                            height="32"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="text-indigo-400"
-                          >
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                            <circle cx="9" cy="7" r="4" />
-                            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                          </svg>
-                        </div>
-                        <div className="text-xl font-semibold text-text-heading mb-2">{t('join_session')}</div>
-                        <div className="text-sm text-text-body mb-6">
-                          {t('join_session_hint')}
-                        </div>
-                        <Button
-                          variant="primary"
-                          size="lg"
-                          className={cn(
-                            'w-full bg-indigo-500 hover:bg-indigo-600 text-lg py-4 transition-all duration-fast',
-                            !busy && 'hover:scale-[1.02]',
-                          )}
-                          onClick={() => void join()}
-                          disabled={busy}
-                        >
-                          {busy
-                            ? (
-                                <>
-                                  <svg
-                                    className="mr-2 h-5 w-5 animate-spin"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <circle
-                                      className="opacity-25"
-                                      cx="12"
-                                      cy="12"
-                                      r="10"
-                                      stroke="currentColor"
-                                      strokeWidth="4"
-                                    />
-                                    <path
-                                      className="opacity-75"
-                                      fill="currentColor"
-                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    />
-                                  </svg>
-                                  {t('joining')}
-                                </>
-                              )
-                            : (
-                                <>
-                                  {t('join')}
-                                  <svg
-                                    className="ml-2 h-5 w-5"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                  </svg>
-                                </>
-                              )}
-                        </Button>
-                      </>
-                    )}
-              </div>
-            </Card>
-          )
-        : data.status === 'active'
+      <div className={s.rule} />
+
+      <section className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center gap-4 py-6">
+        {data.status === 'lobby'
           ? (
-              <Card className="p-8 border-indigo-500 bg-indigo-500/10 animate-slideUp" style={{ animationDelay: '50ms' }}>
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo-500/30">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-indigo-400"
-                    >
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-xl font-semibold text-text-heading mb-1">{t('session_started')}</div>
-                    <div className="text-base text-text-body">
-                      {t('click_to_start_quiz')}
+              data.attemptId
+                ? (
+                    // Joined: waiting for the teacher to start
+                    <div className={cn(s.note, s.yellow, 'flex flex-col gap-2')} role="status">
+                      <div className={noteHeading}>{t('joined_waiting')}</div>
+                      <p className={s.modalText}>{t('auto_redirect_hint')}</p>
+                      {waitDuration
+                        ? (
+                            <p className={s.dim}>
+                              {t('waited')}
+                              {' '}
+                              <span className="font-mono">{waitDuration}</span>
+                            </p>
+                          )
+                        : null}
                     </div>
+                  )
+                : (
+                    // Not joined yet
+                    <>
+                      <div className={cn(s.note, s.blue, 'flex flex-col gap-2')}>
+                        <div className={noteHeading}>{t('join_session')}</div>
+                        <p className={s.modalText}>{t('join_session_hint')}</p>
+                      </div>
+                      <Button
+                        variant="solid"
+                        size="lg"
+                        className="w-full"
+                        onClick={() => void join()}
+                        loading={busy}
+                      >
+                        {busy ? t('joining') : `${t('join')} →`}
+                      </Button>
+                    </>
+                  )
+            )
+          : data.status === 'active'
+            ? (
+                <>
+                  <div className={cn(s.note, s.green, 'flex flex-col gap-2')} role="status">
+                    <div className={noteHeading}>{t('session_started')}</div>
+                    <p className={s.modalText}>{t('click_to_start_quiz')}</p>
                     {data.startedAt
                       ? (
-                          <div className="mt-2 text-xs text-text-muted">
+                          <p className={s.dim}>
                             {t('started_at')}
                             {' '}
                             <span className="font-mono">{new Date(data.startedAt).toLocaleTimeString('en-US')}</span>
-                          </div>
+                          </p>
                         )
                       : null}
                   </div>
-                </div>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className={cn(
-                    'w-full bg-indigo-500 hover:bg-indigo-600 text-lg py-4 transition-all duration-fast',
-                    !busy && 'animate-pulse hover:scale-[1.02]',
-                  )}
-                  onClick={() => void join()}
-                  disabled={busy}
-                >
-                  {busy
-                    ? (
-                        <>
-                          <svg
-                            className="mr-2 h-5 w-5 animate-spin"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            />
-                          </svg>
-                          {t('entering')}
-                        </>
-                      )
-                    : (
-                        <>
-                          {t('start_quiz')}
-                          <svg
-                            className="ml-2 h-5 w-5"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M13 7l5 5m0 0l-5 5m5-5H6"
-                            />
-                          </svg>
-                        </>
-                      )}
-                </Button>
-              </Card>
-            )
-          : (
-              <Card className="p-8 border-border-subtle animate-slideUp" style={{ animationDelay: '50ms' }}>
-                <div className="flex flex-col items-center text-center">
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-bg-section">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="32"
-                      height="32"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-text-muted"
-                    >
-                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                      <polyline points="22 4 12 14.01 9 11.01" />
-                    </svg>
+                  <Button
+                    variant="solid"
+                    size="lg"
+                    className="w-full"
+                    onClick={() => void join()}
+                    loading={busy}
+                  >
+                    {busy ? t('entering') : `${t('start_quiz')} →`}
+                  </Button>
+                </>
+              )
+            : (
+                <>
+                  <div className={cn(s.note, s.dim, 'flex flex-col gap-2')}>
+                    <div className={cn(noteHeading, s.chalk)}>{t('session_ended')}</div>
+                    <p className={s.modalText}>{t('ask_teacher_for_results')}</p>
+                    {data.endedAt
+                      ? (
+                          <p>
+                            {t('ended_at')}
+                            {' '}
+                            <span className="font-mono">{new Date(data.endedAt).toLocaleTimeString('en-US')}</span>
+                          </p>
+                        )
+                      : null}
                   </div>
-                  <div className="text-xl font-semibold text-text-heading mb-2">{t('session_ended')}</div>
-                  <div className="text-sm text-text-muted mb-4">
-                    {t('ask_teacher_for_results')}
-                  </div>
-                  {data.endedAt
-                    ? (
-                        <div className="text-xs text-text-muted">
-                          {t('ended_at')}
-                          {' '}
-                          <span className="font-mono">{new Date(data.endedAt).toLocaleTimeString('en-US')}</span>
-                        </div>
-                      )
-                    : null}
-                  <div className="mt-6">
-                    <Button
-                      variant="ghost"
-                      onClick={() => router.push(getI18nPath(`/dashboard/classes/${data.classroom.id}`, locale))}
-                    >
-                      {t('back_to_class')}
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            )}
-    </div>
+                  <Button
+                    className="self-start"
+                    onClick={() => router.push(getI18nPath(`/dashboard/classes/${data.classroom.id}`, locale))}
+                  >
+                    {t('back_to_class')}
+                  </Button>
+                </>
+              )}
+      </section>
+    </ChalkRoom>
   );
 }
 // EOF

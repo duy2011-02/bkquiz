@@ -6,12 +6,7 @@ type SignOutButtonProps = {
   label: string;
 };
 
+/** Sign-out button sitting on the wooden ledge. */
 export function SignOutButton({ label }: SignOutButtonProps) {
-  return (
-    <SignOutClient
-      label={label}
-      variant="link"
-      className="text-sm"
-    />
-  );
+  return <SignOutClient label={label} buttonVariant="ledge" />;
 }

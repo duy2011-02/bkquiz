@@ -1,9 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -30,6 +30,7 @@ type QuizLite = {
 export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
   const router = useRouter();
   const t = useTranslations('Quizzes');
+  const locale = useLocale();
   const [quizzes, setQuizzes] = useState<QuizLite[]>([]);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -76,7 +77,7 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
 
   function formatDate(dateString: string) {
     const date = new Date(dateString);
-    return new Intl.DateTimeFormat('vi-VN', {
+    return new Intl.DateTimeFormat(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -92,7 +93,7 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
     }
     try {
       const res = await fetch(url.toString(), { method: 'GET' });
-    if (!res.ok) {
+      if (!res.ok) {
         const text = await res.text();
         let json: { quizzes?: QuizLite[]; error?: string };
         try {
@@ -101,9 +102,9 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
           setError(`LOAD_FAILED: ${res.status} ${res.statusText}`);
           return;
         }
-      setError(json.error ?? 'LOAD_FAILED');
-      return;
-    }
+        setError(json.error ?? 'LOAD_FAILED');
+        return;
+      }
       const text = await res.text();
       if (!text) {
         setError('LOAD_FAILED: Empty response');
@@ -117,8 +118,8 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
         console.error('Failed to parse response:', text, err);
         return;
       }
-    setError(null);
-    setQuizzes(json.quizzes ?? []);
+      setError(null);
+      setQuizzes(json.quizzes ?? []);
     } catch (err) {
       setError(`LOAD_FAILED: ${err instanceof Error ? err.message : String(err)}`);
       console.error('Error loading quizzes:', err);
@@ -196,13 +197,13 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
   return (
     <div className="space-y-7">
       {/* Breadcrumb */}
-      <nav className="text-sm">
-        <div className="flex items-center gap-2 text-text-muted">
-          <Link href="/dashboard" className="hover:text-text-heading">
+      <nav className="text-base">
+        <div className="flex items-center gap-2 text-chalk-dim">
+          <Link href="/dashboard" className="hover:text-chalk">
             {t('breadcrumb_dashboard')}
           </Link>
           <span>·</span>
-          <span className="text-text-heading">{t('title')}</span>
+          <span className="text-chalk">{t('title')}</span>
         </div>
       </nav>
 
@@ -210,16 +211,16 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
       <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-text-heading">{t('title')}</h1>
-            <div className="mt-1 text-sm text-text-muted">
+            <h1 className="font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">{t('title')}</h1>
+            <div className="mt-1 text-base text-chalk-dim">
               {t('description')}
             </div>
           </div>
         </div>
 
         <div className="mt-4">
-          <label className="grid gap-1 text-sm" htmlFor="quizTitle">
-            <div className="font-medium text-text-muted">{t('create_new_quiz_draft')}</div>
+          <label className="grid gap-1 text-base" htmlFor="quizTitle">
+            <div className="font-medium text-chalk-dim">{t('create_new_quiz_draft')}</div>
             <div className="flex gap-2">
               <Input
                 id="quizTitle"
@@ -242,7 +243,7 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
 
         {error
           ? (
-              <div className="mt-3 rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="mt-3 rounded-hand border border-chalk-pink/40 bg-chalk-pink/10 p-3 text-base text-chalk-pink">
                 {error}
               </div>
             )
@@ -253,20 +254,20 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
       {quizzes.length > 0 && (
         <div className="grid gap-4 md:grid-cols-4">
           <Card className="p-4">
-            <div className="text-xs text-text-muted">{t('total_quizzes')}</div>
-            <div className="mt-1 text-2xl font-semibold text-text-heading">{stats.total}</div>
+            <div className="text-sm text-chalk-dim">{t('total_quizzes')}</div>
+            <div className="mt-1 text-2xl font-semibold text-chalk">{stats.total}</div>
           </Card>
           <Card className="p-4">
-            <div className="text-xs text-text-muted">{t('draft')}</div>
-            <div className="mt-1 text-2xl font-semibold text-text-heading">{stats.draft}</div>
+            <div className="text-sm text-chalk-dim">{t('draft')}</div>
+            <div className="mt-1 text-2xl font-semibold text-chalk">{stats.draft}</div>
           </Card>
           <Card className="p-4">
-            <div className="text-xs text-text-muted">{t('published')}</div>
-            <div className="mt-1 text-2xl font-semibold text-text-heading">{stats.published}</div>
+            <div className="text-sm text-chalk-dim">{t('published')}</div>
+            <div className="mt-1 text-2xl font-semibold text-chalk">{stats.published}</div>
           </Card>
           <Card className="p-4">
-            <div className="text-xs text-text-muted">{t('archived')}</div>
-            <div className="mt-1 text-2xl font-semibold text-text-heading">{stats.archived}</div>
+            <div className="text-sm text-chalk-dim">{t('archived')}</div>
+            <div className="mt-1 text-2xl font-semibold text-chalk">{stats.archived}</div>
           </Card>
         </div>
       )}
@@ -281,11 +282,11 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
       </Card>
 
       {/* Quiz List */}
-      <Card className="p-5 md:p-6 animate-slideUp" style={{ animationDelay: '100ms' }}>
+      <Card className="p-5 md:p-6">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-lg font-semibold text-text-heading">{t('quiz_list_title')}</div>
-            <div className="mt-1 text-sm text-text-muted">
+            <div className="text-lg font-semibold text-chalk">{t('quiz_list_title')}</div>
+            <div className="mt-1 text-base text-chalk-dim">
               {t('quiz_list_description')}
             </div>
           </div>
@@ -293,11 +294,11 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
 
         {quizzes.length === 0
           ? (
-              <div className="mt-6 rounded-md border border-dashed border-border-subtle px-4 py-8 text-center">
-                <div className="text-sm text-text-muted">
+              <div className="mt-6 rounded-hand border border-dashed border-chalk-faint px-4 py-8 text-center">
+                <div className="text-base text-chalk-dim">
                   {t('no_quizzes_yet')}
                 </div>
-                <div className="mt-2 text-xs text-text-muted">
+                <div className="mt-2 text-sm text-chalk-dim">
                   {t('create_quiz_draft_hint')}
                 </div>
               </div>
@@ -306,22 +307,22 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
               <div className="mt-4 space-y-3">
                 {quizzes.map((q, idx) => (
                   <Link key={q.id} href={`/dashboard/quizzes/${q.id}`}>
-                  <div
-                      className="rounded-md border border-border-subtle bg-bg-section transition-all duration-200 hover:translate-x-1 hover:shadow-md hover:border-primary/30"
+                    <div
+                      className="rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
                       style={{ animationDelay: `${idx * 30}ms` }}
-                  >
-                    <div className="flex items-center justify-between gap-4 px-4 py-3">
+                    >
+                      <div className="flex items-center justify-between gap-4 px-4 py-3">
                         <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_auto_auto] items-center gap-4 md:grid-cols-[2fr_auto_120px_100px]">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-text-heading">{q.title}</div>
-                          {typeof q.ruleCount === 'number' && (
-                            <div className="mt-1 text-xs text-text-muted">
-                              {q.ruleCount}
-                              {' '}
-                              {t('rule_count')}
-                            </div>
-                          )}
-                        </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-base font-medium text-chalk">{q.title}</div>
+                            {typeof q.ruleCount === 'number' && (
+                              <div className="mt-1 text-sm text-chalk-dim">
+                                {q.ruleCount}
+                                {' '}
+                                {t('rule_count')}
+                              </div>
+                            )}
+                          </div>
                           {q.tags && q.tags.length > 0 && (
                             <div className="flex flex-wrap items-center gap-1">
                               {q.tags.slice(0, 5).map((tag) => {
@@ -330,10 +331,10 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
                                   <Badge
                                     key={tag.id}
                                     variant={isSelected ? 'info' : 'neutral'}
-                                    className={`text-xs cursor-pointer transition-colors ${
+                                    className={`cursor-pointer text-sm transition-colors ${
                                       isSelected
-                                        ? 'bg-primary/20 border-primary/40 hover:bg-primary/30'
-                                        : 'hover:bg-primary/10'
+                                        ? 'border-chalk-yellow/40 bg-chalk-yellow/20 hover:bg-chalk-yellow/30'
+                                        : 'hover:bg-chalk-yellow/10'
                                     }`}
                                     onClick={(e) => {
                                       e.preventDefault();
@@ -355,54 +356,54 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
                                 );
                               })}
                               {q.tags.length > 5 && (
-                                <Badge variant="neutral" className="text-xs">
+                                <Badge variant="neutral" className="text-sm">
                                   +
                                   {q.tags.length - 5}
                                 </Badge>
                               )}
                             </div>
                           )}
-                        <Badge
-                          variant={q.status === 'published' ? 'success' : (q.status === 'archived' ? 'neutral' : 'warning')}
-                          className="text-xs"
-                        >
-                          {q.status}
-                        </Badge>
-                        <div className="text-xs text-text-muted">
-                          {formatDate(q.updatedAt)}
+                          <Badge
+                            variant={q.status === 'published' ? 'success' : (q.status === 'archived' ? 'neutral' : 'warning')}
+                            className="text-sm"
+                          >
+                            {q.status}
+                          </Badge>
+                          <div className="text-sm text-chalk-dim">
+                            {formatDate(q.updatedAt)}
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {q.status === 'draft'
-                          ? (
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                disabled={busy}
+                        <div className="flex items-center gap-2">
+                          {q.status === 'draft'
+                            ? (
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  disabled={busy}
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
                                     void updateQuizStatus(q.id, 'published');
                                   }}
-                              >
-                                {t('publish')}
-                              </Button>
-                            )
-                          : null}
-                        <Button
-                          size="sm"
-                          variant="ghost"
+                                >
+                                  {t('publish')}
+                                </Button>
+                              )
+                            : null}
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                            router.push(`/dashboard/quizzes/${q.id}`);
-                          }}
-                        >
-                          {t('open')}
-                        </Button>
+                              router.push(`/dashboard/quizzes/${q.id}`);
+                            }}
+                          >
+                            {t('open')}
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
                   </Link>
                 ))}
               </div>

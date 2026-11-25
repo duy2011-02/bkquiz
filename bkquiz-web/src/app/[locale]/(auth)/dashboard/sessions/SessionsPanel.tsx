@@ -1,12 +1,13 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
+import s from '@/components/chalk/chalk.module.css';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { cn } from '@/utils/cn';
 
 type Session = {
   id: string;
@@ -38,6 +39,7 @@ type Session = {
 
 export function SessionsPanel() {
   const t = useTranslations('Sessions');
+  const locale = useLocale();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export function SessionsPanel() {
       return '—';
     }
     const date = new Date(dateStr);
-    return new Intl.DateTimeFormat('vi-VN', {
+    return new Intl.DateTimeFormat(locale, {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -106,11 +108,11 @@ export function SessionsPanel() {
     return (
       <div className="space-y-7">
         <Card className="p-6">
-          <Skeleton className="h-8 w-48 mb-4" />
+          <Skeleton className="mb-4 h-8 w-48" />
           <Skeleton className="h-4 w-96" />
         </Card>
         <Card className="p-6">
-          <Skeleton className="h-6 w-32 mb-4" />
+          <Skeleton className="mb-4 h-6 w-32" />
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
               <Skeleton key={i} className="h-20 w-full" />
@@ -124,8 +126,8 @@ export function SessionsPanel() {
   if (error) {
     return (
       <Card className="p-6">
-        <div className="text-sm text-text-muted">{t('error')}</div>
-        <div className="mt-2 text-text-body">{error}</div>
+        <div className="text-base text-chalk-dim">{t('error')}</div>
+        <div className="mt-2 text-chalk/85">{error}</div>
       </Card>
     );
   }
@@ -133,25 +135,25 @@ export function SessionsPanel() {
   return (
     <div className="space-y-7">
       {/* Breadcrumb */}
-      <nav className="text-sm animate-fadeIn">
-        <div className="flex items-center gap-2 text-text-muted">
-          <Link href="/dashboard" className="hover:text-text-heading transition-colors">
+      <nav className="text-base">
+        <div className="flex items-center gap-2 text-chalk-dim">
+          <Link href="/dashboard" className="transition-colors hover:text-chalk">
             {t('breadcrumb_dashboard')}
           </Link>
           <span>·</span>
-          <span className="text-text-heading">{t('title')}</span>
+          <span className="text-chalk">{t('title')}</span>
         </div>
       </nav>
 
       {/* Header */}
-      <Card className="p-5 md:p-6 animate-slideUp">
+      <Card className="p-5 md:p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="text-sm text-text-muted">{t('bkquiz_sessions')}</div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-text-heading">
+            <div className="text-base text-chalk-dim">{t('bkquiz_sessions')}</div>
+            <h1 className="mt-1 font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
               {t('title')}
             </h1>
-            <div className="mt-2 text-sm text-text-muted">
+            <div className="mt-2 text-base text-chalk-dim">
               {t('view_and_manage_description')}
             </div>
           </div>
@@ -160,24 +162,24 @@ export function SessionsPanel() {
 
       {/* Active Sessions */}
       {activeSessions.length > 0 && (
-        <Card className="p-5 md:p-6 animate-slideUp" style={{ animationDelay: '50ms' }}>
-          <div className="text-lg font-semibold text-text-heading mb-4">
+        <Card className="p-5 md:p-6">
+          <div className="mb-4 text-lg font-semibold text-chalk">
             {t('ongoing', { count: activeSessions.length })}
           </div>
           <div className="space-y-3">
             {activeSessions.map((session, idx) => (
               <Link key={session.id} href={session.attempt ? `/attempt/${session.attempt.id}` : `/session/${session.id}`}>
                 <div
-                  className="rounded-md border border-border-subtle bg-bg-section transition-all duration-200 hover:translate-x-1 hover:shadow-md hover:border-primary/30 cursor-pointer"
+                  className="cursor-pointer rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
                   style={{ animationDelay: `${idx * 30}ms` }}
                 >
                   <div className="flex items-center justify-between gap-4 px-4 py-3">
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-text-heading">
+                      <div className="text-base font-medium text-chalk">
                         {session.sessionName || session.quiz.title}
                       </div>
                       <div className="mt-1 space-y-0.5">
-                        <div className="text-xs text-text-muted">
+                        <div className="text-sm text-chalk-dim">
                           {session.status === 'active' && t('status_active')}
                           {session.durationSeconds && (
                             <>
@@ -191,7 +193,7 @@ export function SessionsPanel() {
                           )}
                         </div>
                         {((session.startedAt || session.scheduledStartAt) || session.endedAt) && (
-                          <div className="text-xs text-text-muted/80">
+                          <div className="text-sm text-chalk-dim">
                             {(session.startedAt || session.scheduledStartAt) && (
                               <>
                                 {session.status === 'lobby' ? t('start_time') : t('started')}
@@ -210,25 +212,33 @@ export function SessionsPanel() {
                           </div>
                         )}
                         {session.classroom && (
-                          <div className="text-xs text-text-muted/80">
-                            📚 {session.classroom.name} ({session.classroom.classCode})
+                          <div className="text-sm text-chalk-dim">
+                            📚
+                            {' '}
+                            {session.classroom.name}
+                            {' '}
+                            (
+                            {session.classroom.classCode}
+                            )
                           </div>
                         )}
                         {session.attempt && (
-                          <div className="text-xs text-text-muted/80">
-                            Attempt: {session.attempt.status}
+                          <div className="text-sm text-chalk-dim">
+                            Attempt:
+                            {' '}
+                            {session.attempt.status}
                           </div>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex shrink-0 items-center gap-3">
                       <Badge
                         variant={session.status === 'active' ? 'success' : (session.status === 'ended' ? 'neutral' : 'info')}
-                        className="text-xs"
+                        className="text-sm"
                       >
                         {session.status}
                       </Badge>
-                      <span className="text-xs text-text-muted">→</span>
+                      <span className="text-sm text-chalk-dim">→</span>
                     </div>
                   </div>
                 </div>
@@ -240,24 +250,24 @@ export function SessionsPanel() {
 
       {/* Lobby Sessions */}
       {lobbySessions.length > 0 && (
-        <Card className="p-5 md:p-6 animate-slideUp" style={{ animationDelay: '100ms' }}>
-          <div className="text-lg font-semibold text-text-heading mb-4">
+        <Card className="p-5 md:p-6">
+          <div className="mb-4 text-lg font-semibold text-chalk">
             {t('waiting_to_start', { count: lobbySessions.length })}
           </div>
           <div className="space-y-3">
             {lobbySessions.map((session, idx) => (
               <Link key={session.id} href={`/session/${session.id}`}>
                 <div
-                  className="rounded-md border border-border-subtle bg-bg-section transition-all duration-200 hover:translate-x-1 hover:shadow-md hover:border-primary/30 cursor-pointer"
+                  className="cursor-pointer rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
                   style={{ animationDelay: `${idx * 30}ms` }}
                 >
                   <div className="flex items-center justify-between gap-4 px-4 py-3">
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-text-heading">
+                      <div className="text-base font-medium text-chalk">
                         {session.sessionName || session.quiz.title}
                       </div>
                       <div className="mt-1 space-y-0.5">
-                        <div className="text-xs text-text-muted">
+                        <div className="text-sm text-chalk-dim">
                           {session.status === 'lobby' && t('status_lobby')}
                           {session.durationSeconds && (
                             <>
@@ -271,7 +281,7 @@ export function SessionsPanel() {
                           )}
                         </div>
                         {((session.startedAt || session.scheduledStartAt) || session.endedAt) && (
-                          <div className="text-xs text-text-muted/80">
+                          <div className="text-sm text-chalk-dim">
                             {(session.startedAt || session.scheduledStartAt) && (
                               <>
                                 {session.status === 'lobby' ? t('start_time') : t('started')}
@@ -290,20 +300,26 @@ export function SessionsPanel() {
                           </div>
                         )}
                         {session.classroom && (
-                          <div className="text-xs text-text-muted/80">
-                            📚 {session.classroom.name} ({session.classroom.classCode})
+                          <div className="text-sm text-chalk-dim">
+                            📚
+                            {' '}
+                            {session.classroom.name}
+                            {' '}
+                            (
+                            {session.classroom.classCode}
+                            )
                           </div>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex shrink-0 items-center gap-3">
                       <Badge
                         variant={session.status === 'active' ? 'success' : (session.status === 'ended' ? 'neutral' : 'info')}
-                        className="text-xs"
+                        className="text-sm"
                       >
                         {session.status}
                       </Badge>
-                      <span className="text-xs text-text-muted">→</span>
+                      <span className="text-sm text-chalk-dim">→</span>
                     </div>
                   </div>
                 </div>
@@ -315,8 +331,8 @@ export function SessionsPanel() {
 
       {/* Past Sessions - Grouped by Class */}
       {pastSessions.length > 0 && (
-        <Card className="p-5 md:p-6 animate-slideUp" style={{ animationDelay: '150ms' }}>
-          <div className="text-lg font-semibold text-text-heading mb-4">
+        <Card className="p-5 md:p-6">
+          <div className="mb-4 text-lg font-semibold text-chalk">
             {t('ended', { count: pastSessions.length })}
           </div>
           <div className="space-y-6">
@@ -327,25 +343,31 @@ export function SessionsPanel() {
                   {/* Class Header */}
                   {classroom
                     ? (
-                        <div className="flex items-center gap-2 pb-2 border-b border-border-subtle">
+                        <div className="flex items-center gap-2 border-b border-chalk-faint pb-2">
                           <Link
                             href={`/dashboard/classes/${classroom.id}`}
-                            className="text-sm font-semibold text-text-heading hover:text-primary transition-colors cursor-pointer"
+                            className="cursor-pointer text-base font-semibold text-chalk transition-colors hover:text-chalk-yellow"
                           >
-                            📚 {classroom.name}
+                            📚
+                            {' '}
+                            {classroom.name}
                           </Link>
-                          <Badge variant="neutral" className="text-xs">
-                            {classSessions.length} {classSessions.length > 1 ? t('sessions') : t('session')}
+                          <Badge variant="neutral" className="text-sm">
+                            {classSessions.length}
+                            {' '}
+                            {classSessions.length > 1 ? t('sessions') : t('session')}
                           </Badge>
                         </div>
                       )
                     : (
-                        <div className="flex items-center gap-2 pb-2 border-b border-border-subtle">
-                          <span className="text-sm font-semibold text-text-muted">
+                        <div className="flex items-center gap-2 border-b border-chalk-faint pb-2">
+                          <span className="text-base font-semibold text-chalk-dim">
                             {t('other')}
                           </span>
-                          <Badge variant="neutral" className="text-xs">
-                            {classSessions.length} {classSessions.length > 1 ? t('sessions') : t('session')}
+                          <Badge variant="neutral" className="text-sm">
+                            {classSessions.length}
+                            {' '}
+                            {classSessions.length > 1 ? t('sessions') : t('session')}
                           </Badge>
                         </div>
                       )}
@@ -357,16 +379,16 @@ export function SessionsPanel() {
                         href={session.attempt ? `/attempt/${session.attempt.id}` : `/session/${session.id}`}
                       >
                         <div
-                          className="rounded-md border border-border-subtle bg-bg-section transition-all duration-200 hover:translate-x-1 hover:shadow-md hover:border-primary/30 cursor-pointer"
+                          className="cursor-pointer rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
                           style={{ animationDelay: `${(groupIdx * 100) + (idx * 30)}ms` }}
                         >
                           <div className="flex items-center justify-between gap-4 px-4 py-3">
                             <div className="min-w-0 flex-1">
-                              <div className="text-sm font-medium text-text-heading">
+                              <div className="text-base font-medium text-chalk">
                                 {session.sessionName || session.quiz.title}
                               </div>
                               <div className="mt-1 space-y-0.5">
-                                <div className="text-xs text-text-muted">
+                                <div className="text-sm text-chalk-dim">
                                   {session.status === 'ended' && t('status_ended')}
                                   {session.durationSeconds && (
                                     <>
@@ -380,7 +402,7 @@ export function SessionsPanel() {
                                   )}
                                 </div>
                                 {((session.startedAt || session.scheduledStartAt) || session.endedAt) && (
-                                  <div className="text-xs text-text-muted/80">
+                                  <div className="text-sm text-chalk-dim">
                                     {(session.startedAt || session.scheduledStartAt) && (
                                       <>
                                         {t('started')}
@@ -399,31 +421,37 @@ export function SessionsPanel() {
                                   </div>
                                 )}
                                 {session.classroom && (
-                                  <div className="text-xs text-text-muted/80">
-                                    📚 {session.classroom.name} ({session.classroom.classCode})
+                                  <div className="text-sm text-chalk-dim">
+                                    📚
+                                    {' '}
+                                    {session.classroom.name}
+                                    {' '}
+                                    (
+                                    {session.classroom.classCode}
+                                    )
                                   </div>
                                 )}
                               </div>
                             </div>
                             {/* Score display for ended sessions with attempt - centered */}
                             {session.attempt && session.attempt.score !== null && (
-                              <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary/10 border border-primary/30">
-                                <div className="text-sm font-medium text-text-muted uppercase tracking-wide">
+                              <div className="flex items-center gap-2 rounded-hand border border-chalk-yellow/30 bg-chalk-yellow/10 px-4 py-2">
+                                <div className="text-base font-medium text-chalk-dim">
                                   {t('score')}
                                 </div>
-                                <div className="text-2xl font-bold text-primary tabular-nums">
+                                <div className="text-2xl font-bold text-chalk-yellow tabular-nums">
                                   {session.attempt.score.toFixed(1)}
                                 </div>
                               </div>
                             )}
-                            <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex shrink-0 items-center gap-3">
                               <Badge
                                 variant={session.status === 'active' ? 'success' : (session.status === 'ended' ? 'neutral' : 'info')}
-                                className="text-xs"
+                                className="text-sm"
                               >
                                 {session.status}
                               </Badge>
-                              <span className="text-xs text-text-muted">→</span>
+                              <span className="text-sm text-chalk-dim">→</span>
                             </div>
                           </div>
                         </div>
@@ -439,20 +467,16 @@ export function SessionsPanel() {
 
       {/* Empty State */}
       {sessions.length === 0 && (
-        <Card className="p-5 md:p-6 animate-slideUp" style={{ animationDelay: '200ms' }}>
-          <div className="rounded-md border border-dashed border-border-subtle px-4 py-8 text-center">
-            <div className="text-sm text-text-muted">
+        <Card className="p-5 md:p-6">
+          <div className="rounded-hand border border-dashed border-chalk-faint px-4 py-8 text-center">
+            <div className="text-base text-chalk-dim">
               {t('no_sessions')}
             </div>
-            <div className="mt-2 text-xs text-text-muted">
+            <div className="mt-2 text-sm text-chalk-dim">
               {t('join_class_hint')}
             </div>
             <div className="mt-4">
-              <Link href="/dashboard/classes">
-                <Button variant="primary" size="sm" className="hover:scale-105">
-                  {t('join_class')}
-                </Button>
-              </Link>
+              <Link href="/dashboard/classes" className={cn(s.btn, s.btnPrimary, s.btnSm)}>{t('join_class')}</Link>
             </div>
           </div>
         </Card>

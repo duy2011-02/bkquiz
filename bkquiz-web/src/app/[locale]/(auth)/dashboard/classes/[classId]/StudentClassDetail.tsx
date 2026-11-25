@@ -1,14 +1,17 @@
 'use client';
 
+import type { ClassInfo, Member, Session } from './types';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ClassHeader } from './shared/ClassHeader';
 import { MembersList } from './shared/MembersList';
 import { SessionsList } from './shared/SessionsList';
 import { StatsCards } from './shared/StatsCards';
-import type { ClassInfo, Member, Session } from './types';
 
 type StudentClassDetailProps = {
   classId: string;
@@ -16,10 +19,33 @@ type StudentClassDetailProps = {
 
 export function StudentClassDetail(props: StudentClassDetailProps) {
   const { classId } = props;
+  const t = useTranslations('Classes.detail');
+  const tClasses = useTranslations('Classes');
   const [classInfo, setClassInfo] = useState<ClassInfo | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeTab, setActiveTab] = useState<'members' | 'sessions'>('members');
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+  const router = useRouter();
+
+  async function leaveClass() {
+    if (!classInfo || !window.confirm(t('confirm_leave_class', { name: classInfo.name }))) {
+      return;
+    }
+    setLeaving(true);
+    setLeaveError(null);
+    try {
+      const res = await fetch(`/api/classes/${classId}/members/me`, { method: 'DELETE' });
+      if (!res.ok) {
+        setLeaveError(t('error_generic'));
+        return;
+      }
+      router.push('/dashboard/classes');
+    } finally {
+      setLeaving(false);
+    }
+  }
 
   async function loadClassInfo() {
     const res = await fetch(`/api/classes/${classId}`, { method: 'GET' });
@@ -62,7 +88,7 @@ export function StudentClassDetail(props: StudentClassDetailProps) {
     return (
       <div className="space-y-7">
         <Card className="p-5 md:p-6">
-          <div className="text-center text-text-muted">Đang tải...</div>
+          <div className="text-center text-chalk-dim">{t('loading')}</div>
         </Card>
       </div>
     );
@@ -71,21 +97,21 @@ export function StudentClassDetail(props: StudentClassDetailProps) {
   const isOwner = classInfo.userRole === 'teacher';
 
   return (
-    <div className="space-y-7 animate-fadeIn">
+    <div className="space-y-7">
       {/* Breadcrumb */}
-      <nav className="text-sm animate-slideUp">
-        <div className="flex items-center gap-2 text-text-muted">
-          <Link href="/dashboard" className="hover:text-text-heading transition-colors">
-            Dashboard
+      <nav className="text-base">
+        <div className="flex items-center gap-2 text-chalk-dim">
+          <Link href="/dashboard" className="transition-colors hover:text-chalk">
+            {tClasses('breadcrumb_dashboard')}
           </Link>
           <span>·</span>
-          <Link href="/dashboard/classes" className="hover:text-text-heading transition-colors">
-            Classes
+          <Link href="/dashboard/classes" className="transition-colors hover:text-chalk">
+            {tClasses('meta_title')}
           </Link>
           <span>·</span>
-          <span className="text-text-heading">{classInfo.name}</span>
-          <Badge variant="info" className="text-[10px] px-1.5 py-0.5 ml-2">
-            Student
+          <span className="text-chalk">{classInfo.name}</span>
+          <Badge variant="info" className="ml-2 px-1.5 py-0.5 text-sm">
+            {t('role_student')}
           </Badge>
         </div>
       </nav>
@@ -97,29 +123,29 @@ export function StudentClassDetail(props: StudentClassDetailProps) {
       <StatsCards members={members} sessions={sessions} isOwner={isOwner} />
 
       {/* Tabs */}
-      <Card className="p-5 md:p-6 animate-slideUp border-indigo-500/20" style={{ animationDelay: '150ms' }}>
-        <div className="flex gap-2 border-b border-border-subtle">
+      <Card className="border-chalk-blue/20 p-5 md:p-6">
+        <div className="flex gap-2 border-b border-chalk-faint">
           <button
             type="button"
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
+            className={`px-4 py-2 text-base font-medium transition-colors ${
               activeTab === 'members'
-                ? 'border-b-2 border-indigo-500 text-text-heading'
-                : 'text-text-muted hover:text-text-heading'
+                ? 'border-b-2 border-chalk-blue text-chalk'
+                : 'text-chalk-dim hover:text-chalk'
             }`}
             onClick={() => setActiveTab('members')}
           >
-            Members
+            {t('members')}
           </button>
           <button
             type="button"
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
+            className={`px-4 py-2 text-base font-medium transition-colors ${
               activeTab === 'sessions'
-                ? 'border-b-2 border-indigo-500 text-text-heading'
-                : 'text-text-muted hover:text-text-heading'
+                ? 'border-b-2 border-chalk-blue text-chalk'
+                : 'text-chalk-dim hover:text-chalk'
             }`}
             onClick={() => setActiveTab('sessions')}
           >
-            My Sessions
+            {t('my_sessions')}
           </button>
         </div>
 
@@ -134,7 +160,21 @@ export function StudentClassDetail(props: StudentClassDetailProps) {
           )}
         </div>
       </Card>
+
+      {!isOwner && (
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-chalk-pink hover:text-chalk-pink"
+            disabled={leaving}
+            onClick={() => void leaveClass()}
+          >
+            {t('leave_class')}
+          </Button>
+          <div className="text-sm text-chalk-dim">{leaveError ?? t('leave_class_hint')}</div>
+        </div>
+      )}
     </div>
   );
 }
-

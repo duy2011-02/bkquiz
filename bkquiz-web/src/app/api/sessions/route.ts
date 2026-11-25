@@ -192,11 +192,15 @@ export async function POST(req: Request) {
 
     const quiz = await prisma.quiz.findUnique({
     where: { id: body.quizId },
-    select: { id: true, _count: { select: { rules: true } } },
+    select: { id: true, status: true, _count: { select: { rules: true } } },
   });
 
   if (!quiz) {
     return NextResponse.json({ error: 'QUIZ_NOT_FOUND' }, { status: 404 });
+  }
+
+  if (quiz.status === 'archived') {
+    return NextResponse.json({ error: 'QUIZ_ARCHIVED' }, { status: 400 });
   }
 
   if (quiz._count.rules === 0) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireTeacher, requireUser } from '@/server/authz';
+import { requirePoolOwnership, requireTeacher, requireUser } from '@/server/authz';
+import { handleAuthorizationError } from '@/server/authzHelpers';
 import { requirePoolPermission } from '@/server/poolAuthz';
 import { prisma } from '@/server/prisma';
 
@@ -61,4 +62,27 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ poolId: strin
   });
 
   return NextResponse.json(updated);
+}
+
+/**
+ * Xoá pool (chỉ chủ pool). Câu hỏi và chia sẻ của pool bị xoá theo.
+ * Session đã tạo không bị ảnh hưởng vì đề của session là bản snapshot.
+ */
+export async function DELETE(_: Request, ctx: { params: Promise<{ poolId: string }> }) {
+  try {
+    const { userId, devRole } = await requireUser();
+    await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
+    const { poolId } = await ctx.params;
+    await requirePoolOwnership(userId, poolId);
+
+    await prisma.questionPool.delete({ where: { id: poolId } });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const authzResponse = handleAuthorizationError(error);
+    if (authzResponse) {
+      return authzResponse;
+    }
+    throw error;
+  }
 }

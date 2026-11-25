@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAttemptAccess, requireUser } from '@/server/authz';
+import { applyFailedVerify, isAttemptLocked, isInCooldown, nextCheckpointDueAt } from '@/server/checkpointPolicy';
 import { prisma } from '@/server/prisma';
 import { verifyTotp } from '@/server/totp';
-
-function randomInt(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
 
 const VerifySchema = z.object({
   token: z.string().trim().min(4).max(12),
@@ -46,8 +43,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ attemptId: str
   }
 
   const now = new Date();
-  const inCooldown = attempt.cooldownUntil ? attempt.cooldownUntil.getTime() > now.getTime() : false;
-  const isLocked = attempt.lockedUntil ? attempt.lockedUntil.getTime() > now.getTime() : attempt.status === 'locked';
+  const inCooldown = isInCooldown(attempt.cooldownUntil, now);
+  const isLocked = isAttemptLocked(attempt.lockedUntil, attempt.status, now);
   if (isLocked) {
     return NextResponse.json({ error: 'ATTEMPT_LOCKED', lockedUntil: attempt.lockedUntil }, { status: 403 });
   }
@@ -63,7 +60,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ attemptId: str
   });
 
   if (ok) {
-    const nextDueAt = new Date(Date.now() + randomInt(240, 300) * 1000);
+    const nextDueAt = nextCheckpointDueAt(now);
     const updated = await prisma.attempt.update({
       where: { id: attemptId },
       data: {
@@ -88,9 +85,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ attemptId: str
     return NextResponse.json({ ok: true, ...updated });
   }
 
-  const failedCount = attempt.failedCount + 1;
-  const cooldownUntil = failedCount >= 3 ? new Date(Date.now() + 30 * 1000) : null;
-  const lockedUntil = failedCount >= 6 ? new Date(Date.now() + 5 * 60 * 1000) : null;
+  // 3 lần sai → chờ 30 s; 6 lần sai → khoá 5 phút (src/server/checkpointPolicy.ts)
+  const { failedCount, cooldownUntil, lockedUntil } = applyFailedVerify(attempt.failedCount, now);
 
   const updated = await prisma.attempt.update({
     where: { id: attemptId },

@@ -1,7 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +22,7 @@ type Pool = {
 
 export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
   const t = useTranslations('QuestionBank');
+  const locale = useLocale();
   const [owned, setOwned] = useState<Pool[]>(props.initialOwned);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,19 +178,19 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
   return (
     <div className="space-y-7">
       {/* Breadcrumb */}
-      <nav className="text-sm text-text-muted">
-        <Link href="/dashboard" className="hover:text-text-heading transition-colors">
+      <nav className="text-base text-chalk-dim">
+        <Link href="/dashboard" className="transition-colors hover:text-chalk">
           {t('breadcrumb_dashboard')}
         </Link>
         <span className="mx-2">·</span>
-        <span className="text-text-heading">{t('title')}</span>
+        <span className="text-chalk">{t('title')}</span>
       </nav>
 
       <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-lg font-semibold text-text-heading">{t('title')}</div>
-            <div className="mt-1 text-sm text-text-muted">
+            <div className="text-lg font-semibold text-chalk">{t('title')}</div>
+            <div className="mt-1 text-base text-chalk-dim">
               {t('description')}
             </div>
           </div>
@@ -206,8 +207,8 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
         {/* Create Pool Form */}
         {showCreateForm
           ? (
-              <div className="mt-4 rounded-md border border-border-subtle bg-bg-section p-4">
-                <div className="text-sm font-medium text-text-heading mb-3">
+              <div className="mt-4 rounded-hand border border-chalk-faint bg-white/2 p-4">
+                <div className="mb-3 text-base font-medium text-chalk">
                   {t('create_new_pool')}
                 </div>
                 <div className="flex gap-3">
@@ -231,13 +232,13 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
           : null}
 
         <div className="mt-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-medium text-text-heading">{t('import_from_markdown_zip')}</div>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-base font-medium text-chalk">{t('import_from_markdown_zip')}</div>
             <a
               href="/docs/import.md"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-primary hover:underline"
+              className="text-sm text-chalk-yellow hover:underline"
             >
               {t('view_guide')}
             </a>
@@ -249,17 +250,17 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
             onDrop={handleDrop}
             className={`mt-2 rounded-md border-2 border-dashed transition-colors ${
               file
-                ? 'border-primary/40 bg-primary/5'
-                : 'border-border-subtle bg-bg-section hover:border-border-strong'
+                ? 'border-chalk-yellow/40 bg-chalk-yellow/5'
+                : 'border-chalk-faint bg-white/2 hover:border-chalk-dim'
             }`}
           >
             {file
               ? (
                   <div className="p-6 text-center">
-                    <div className="text-sm font-medium text-text-heading mb-1">
+                    <div className="mb-1 text-base font-medium text-chalk">
                       {file.name}
                     </div>
-                    <div className="text-xs text-text-muted mb-3">
+                    <div className="mb-3 text-sm text-chalk-dim">
                       {(file.size / 1024).toFixed(1)}
                       {' '}
                       KB
@@ -275,11 +276,11 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
                   </div>
                 )
               : (
-                  <label className="block p-8 text-center cursor-pointer">
-                    <div className="text-sm text-text-muted mb-2">
+                  <label className="block cursor-pointer p-8 text-center">
+                    <div className="mb-2 text-base text-chalk-dim">
                       {t('drag_drop_or_click')}
                     </div>
-                    <div className="text-xs text-text-muted">
+                    <div className="text-sm text-chalk-dim">
                       {t('supported_files')}
                       {' '}
                       <span className="font-mono">{t('md_or_zip')}</span>
@@ -304,7 +305,7 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
 
         {error
           ? (
-              <div className="mt-3 rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="mt-3 rounded-hand border border-chalk-pink/40 bg-chalk-pink/10 p-3 text-base text-chalk-pink">
                 {error}
               </div>
             )
@@ -320,11 +321,11 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
         />
       </Card>
 
-      <Card className="p-5 md:p-6 animate-slideUp" style={{ animationDelay: '100ms' }}>
+      <Card className="p-5 md:p-6">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-lg font-semibold text-text-heading">{t('your_pools')}</div>
-            <div className="mt-1 text-sm text-text-muted">
+            <div className="text-lg font-semibold text-chalk">{t('your_pools')}</div>
+            <div className="mt-1 text-base text-chalk-dim">
               {sorted.length}
               {' '}
               {t('pools')}
@@ -341,31 +342,29 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
             )
           : sorted.length === 0
             ? (
-                <div className="mt-6 rounded-md border border-dashed border-border-subtle px-4 py-8 text-center">
-                  <div className="text-sm text-text-muted">
+                <div className="mt-6 rounded-hand border border-dashed border-chalk-faint px-4 py-8 text-center">
+                  <div className="text-base text-chalk-dim">
                     {t('no_pools_yet')}
                   </div>
-                  <div className="mt-2 text-xs text-text-muted">
+                  <div className="mt-2 text-sm text-chalk-dim">
                     {t('get_started_hint')}
-                    </div>
                   </div>
-                )
+                </div>
+              )
             : (
                 <div className="mt-4 space-y-3">
                   {sorted.map((p, idx) => (
                     <Link key={p.id} href={`/dashboard/question-bank/${p.id}`}>
                       <div
-                        className="rounded-md border border-border-subtle bg-bg-section transition-all duration-200 hover:translate-x-1 hover:shadow-md hover:border-primary/30"
+                        className="rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
                         style={{ animationDelay: `${idx * 30}ms` }}
                       >
                         <div className="flex items-center justify-between gap-4 px-4 py-3">
                           <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_auto_auto] items-center gap-4 md:grid-cols-[2fr_auto_120px_100px]">
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-medium text-text-heading">{p.name}</div>
-                              <div className="mt-1 text-xs text-text-muted">
-                                {p.questionCount ?? 0}
-                                {' '}
-                                câu
+                              <div className="truncate text-base font-medium text-chalk">{p.name}</div>
+                              <div className="mt-1 text-sm text-chalk-dim">
+                                {t('questions_count', { count: p.questionCount ?? 0 })}
                               </div>
                             </div>
                             {p.tags && p.tags.length > 0 && (
@@ -376,10 +375,10 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
                                     <Badge
                                       key={tag.id}
                                       variant={isSelected ? 'info' : 'neutral'}
-                                      className={`text-xs cursor-pointer transition-colors ${
+                                      className={`cursor-pointer text-sm transition-colors ${
                                         isSelected
-                                          ? 'bg-primary/20 border-primary/40 hover:bg-primary/30'
-                                          : 'hover:bg-primary/10'
+                                          ? 'border-chalk-yellow/40 bg-chalk-yellow/20 hover:bg-chalk-yellow/30'
+                                          : 'hover:bg-chalk-yellow/10'
                                       }`}
                                       onClick={(e) => {
                                         e.preventDefault();
@@ -401,7 +400,7 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
                                   );
                                 })}
                                 {p.tags.length > 5 && (
-                                  <Badge variant="neutral" className="text-xs">
+                                  <Badge variant="neutral" className="text-sm">
                                     +
                                     {p.tags.length - 5}
                                   </Badge>
@@ -410,25 +409,25 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
                             )}
                             <Badge
                               variant={p.visibility === 'shared' ? 'info' : 'neutral'}
-                              className="text-xs"
+                              className="text-sm"
                             >
                               {p.visibility}
                             </Badge>
-                            <div className="text-xs text-text-muted">
+                            <div className="text-sm text-chalk-dim">
                               <span className="font-mono">
-                                {new Date(p.updatedAt).toLocaleDateString('vi-VN')}
+                                {new Date(p.updatedAt).toLocaleDateString(locale)}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-text-muted">→</span>
+                            <span className="text-sm text-chalk-dim">→</span>
                           </div>
                         </div>
                       </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
+                    </Link>
+                  ))}
+                </div>
+              )}
       </Card>
     </div>
   );

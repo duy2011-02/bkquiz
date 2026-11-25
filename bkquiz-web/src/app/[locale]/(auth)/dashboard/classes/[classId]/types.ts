@@ -46,9 +46,9 @@ export type QuizLite = {
   tags?: Array<{ id: string; name: string; normalizedName: string }>;
 };
 
-export function formatDate(dateString: string) {
+export function formatDate(dateString: string, locale: string) {
   const date = new Date(dateString);
-  return new Intl.DateTimeFormat('vi-VN', {
+  return new Intl.DateTimeFormat(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

@@ -1,14 +1,19 @@
 'use client';
 
+import type { ReactNode } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import s from '@/components/chalk/chalk.module.css';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Table, TableWrap } from '@/components/ui/Table';
-import { Toast } from '@/components/ui/Toast';
 import { TagInput } from '@/components/ui/TagInput';
+import { Toast } from '@/components/ui/Toast';
+import { cn } from '@/utils/cn';
 
 type PoolLite = { id: string; name: string; visibility: 'private' | 'shared'; permission?: 'view' | 'use' | 'edit' };
 type RuleRow = {
@@ -25,8 +30,14 @@ type PoolsResponse = { owned: PoolLite[]; shared: PoolLite[] };
 type QuizSettingsResponse = {
   durationSeconds?: number | null;
   variant?: { defaultExtraPercent: number };
+  scoring?: { mode: ScoringMode; partialCreditMethod: PartialMethod; penaltyPerWrongOption: number };
 };
+type ScoringMode = 'all_or_nothing' | 'partial' | 'penalty';
+type PartialMethod = 'edc' | 'halves';
 type TagSuggestion = { id: string; name: string; normalizedName: string; questionCount: number };
+const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
+const strong = (chunks: ReactNode) => <strong>{chunks}</strong>;
+
 type QuizInfo = {
   id: string;
   title: string;
@@ -36,7 +47,13 @@ type QuizInfo = {
 };
 
 export function QuizRulesPanel(props: { quizId: string; userId: string | null }) {
+  const t = useTranslations('Quizzes.detail');
+  const tQuizzes = useTranslations('Quizzes');
+  const locale = useLocale();
+  const router = useRouter();
   const [quizInfo, setQuizInfo] = useState<QuizInfo | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState('');
   const [rules, setRules] = useState<RuleRow[]>([]);
   const [pools, setPools] = useState<PoolLite[]>([]);
   const [preview, setPreview] = useState<null | {
@@ -67,6 +84,9 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
   const [showDefaultExtra, setShowDefaultExtra] = useState(false);
   const [poolSearchQuery, setPoolSearchQuery] = useState('');
   const [durationMinutes, setDurationMinutes] = useState<number | null>(null);
+  const [scoringMode, setScoringMode] = useState<ScoringMode>('all_or_nothing');
+  const [partialMethod, setPartialMethod] = useState<PartialMethod>('edc');
+  const [penaltyPerWrong, setPenaltyPerWrong] = useState(0.25);
 
   // Tags state
   const [tagsInput, setTagsInput] = useState('');
@@ -165,6 +185,11 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       } else {
         setDurationMinutes(null);
       }
+      if (sJson.scoring) {
+        setScoringMode(sJson.scoring.mode);
+        setPartialMethod(sJson.scoring.partialCreditMethod);
+        setPenaltyPerWrong(sJson.scoring.penaltyPerWrongOption);
+      }
     }
   }
 
@@ -192,13 +217,13 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       const json = await res.json() as { tags?: Array<{ id: string; name: string; normalizedName: string }>; error?: string };
       if (res.ok) {
         setTags(json.tags ?? []);
-        setToast({ message: 'Đã lưu tags thành công', type: 'success' });
+        setToast({ message: t('tags_saved'), type: 'success' });
       } else {
-        setToast({ message: json.error ?? 'Lỗi khi lưu tags', type: 'error' });
+        setToast({ message: json.error ?? t('tags_save_error'), type: 'error' });
       }
     } catch (err) {
       console.error('Error saving tags:', err);
-      setToast({ message: 'Lỗi khi lưu tags', type: 'error' });
+      setToast({ message: t('tags_save_error'), type: 'error' });
     } finally {
       setTagsBusy(false);
     }
@@ -237,13 +262,13 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
           // Response không phải JSON, dùng message mặc định
         }
         setError(errorMessage);
-        setToast({ message: 'Không thể lưu lượt chọn câu', type: 'error' });
+        setToast({ message: t('rule_save_failed'), type: 'error' });
         return;
       }
       const json = await res.json() as { ok?: boolean; rule?: any; error?: string };
       if (!json.ok) {
         setError(json.error ?? 'SAVE_FAILED');
-        setToast({ message: 'Không thể lưu lượt chọn câu', type: 'error' });
+        setToast({ message: t('rule_save_failed'), type: 'error' });
         return;
       }
       setTag('');
@@ -254,7 +279,7 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       setExtraPercent(0.2);
       setUseDefaultExtra(true);
       setSelectedPoolIds([]);
-      setToast({ message: 'Đã lưu lượt chọn câu thành công', type: 'success' });
+      setToast({ message: t('rule_saved'), type: 'success' });
       await load();
     } finally {
       setBusy(false);
@@ -273,10 +298,10 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       const json = await res.json() as { error?: string };
       if (!res.ok) {
         setError(json.error ?? 'SAVE_SETTINGS_FAILED');
-        setToast({ message: 'Không thể lưu cài đặt', type: 'error' });
+        setToast({ message: t('settings_save_failed'), type: 'error' });
         return;
       }
-      setToast({ message: 'Đã lưu cài đặt mặc định', type: 'success' });
+      setToast({ message: t('default_settings_saved'), type: 'success' });
       await load();
     } finally {
       setBusy(false);
@@ -285,7 +310,7 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
 
   async function saveDuration() {
     if (durationMinutes === null || durationMinutes < 1) {
-      setToast({ message: 'Vui lòng nhập thời gian làm bài (tối thiểu 1 phút)', type: 'error' });
+      setToast({ message: t('duration_required'), type: 'error' });
       return;
     }
     setBusy(true);
@@ -299,10 +324,38 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       const json = await res.json() as { error?: string };
       if (!res.ok) {
         setError(json.error ?? 'SAVE_DURATION_FAILED');
-        setToast({ message: 'Không thể lưu thời gian làm bài', type: 'error' });
+        setToast({ message: t('duration_save_failed'), type: 'error' });
         return;
       }
-      setToast({ message: 'Đã lưu thời gian làm bài', type: 'success' });
+      setToast({ message: t('duration_saved'), type: 'success' });
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveScoring() {
+    if (!(penaltyPerWrong >= 0 && penaltyPerWrong <= 1)) {
+      setToast({ message: t('scoring_penalty_invalid'), type: 'error' });
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/quizzes/${props.quizId}/settings`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          scoring: { mode: scoringMode, partialCreditMethod: partialMethod, penaltyPerWrongOption: penaltyPerWrong },
+        }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        setError(json.error ?? 'SAVE_SCORING_FAILED');
+        setToast({ message: t('scoring_save_failed'), type: 'error' });
+        return;
+      }
+      setToast({ message: t('scoring_saved'), type: 'success' });
       await load();
     } finally {
       setBusy(false);
@@ -324,11 +377,84 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       const json = await res.json() as { error?: string };
       if (!res.ok) {
         setError(json.error ?? 'PUBLISH_FAILED');
-        setToast({ message: 'Không thể publish quiz', type: 'error' });
+        setToast({ message: t('publish_failed'), type: 'error' });
         return;
       }
-      setToast({ message: 'Đã publish quiz thành công', type: 'success' });
+      setToast({ message: t('published_success'), type: 'success' });
       await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTitle() {
+    const title = titleInput.trim();
+    if (!title) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/quizzes/${props.quizId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        setError(json.error ?? 'RENAME_FAILED');
+        setToast({ message: t('rename_failed'), type: 'error' });
+        return;
+      }
+      setEditingTitle(false);
+      setToast({ message: t('renamed_success'), type: 'success' });
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setArchived(archived: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/quizzes/${props.quizId}/status`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: archived ? 'archived' : 'draft' }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        setError(json.error ?? 'UPDATE_STATUS_FAILED');
+        setToast({ message: t('status_update_failed'), type: 'error' });
+        return;
+      }
+      setToast({ message: archived ? t('archived_success') : t('unarchived_success'), type: 'success' });
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteQuiz() {
+    if (!quizInfo || !window.confirm(t('confirm_delete_quiz', { title: quizInfo.title }))) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/quizzes/${props.quizId}`, { method: 'DELETE' });
+      const json = await res.json() as { error?: string; sessionCount?: number };
+      if (!res.ok) {
+        setToast({
+          message: json.error === 'QUIZ_HAS_SESSIONS'
+            ? t('delete_quiz_has_sessions', { count: json.sessionCount ?? 0 })
+            : t('delete_quiz_failed'),
+          type: 'error',
+        });
+        return;
+      }
+      router.push('/dashboard/quizzes');
     } finally {
       setBusy(false);
     }
@@ -336,7 +462,7 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
 
   function formatDate(dateString: string) {
     const date = new Date(dateString);
-    return new Intl.DateTimeFormat('vi-VN', {
+    return new Intl.DateTimeFormat(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -364,19 +490,19 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
   return (
     <div className="space-y-7">
       {/* Breadcrumb */}
-      <nav className="text-sm">
-        <div className="flex items-center gap-2 text-text-muted">
-          <Link href="/dashboard" className="hover:text-text-heading">
-            Dashboard
+      <nav className="text-base">
+        <div className="flex items-center gap-2 text-chalk-dim">
+          <Link href="/dashboard" className="hover:text-chalk">
+            {t('breadcrumb_dashboard')}
           </Link>
           <span>·</span>
-          <Link href="/dashboard/quizzes" className="hover:text-text-heading">
-            Quizzes
+          <Link href="/dashboard/quizzes" className="hover:text-chalk">
+            {t('breadcrumb_quizzes')}
           </Link>
           {quizInfo && (
             <>
               <span>·</span>
-              <span className="text-text-heading truncate">{quizInfo.title}</span>
+              <span className="truncate text-chalk">{quizInfo.title}</span>
             </>
           )}
         </div>
@@ -388,9 +514,50 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-semibold text-text-heading truncate">
-                  {quizInfo.title}
-                </h1>
+                {editingTitle
+                  ? (
+                      <form
+                        className="flex min-w-0 flex-1 items-center gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void saveTitle();
+                        }}
+                      >
+                        <Input
+                          aria-label={t('title_label')}
+                          value={titleInput}
+                          onChange={e => setTitleInput(e.target.value)}
+                          maxLength={200}
+                          disabled={busy}
+                          className="flex-1"
+                        />
+                        <Button type="submit" variant="primary" size="sm" disabled={busy || titleInput.trim() === ''}>
+                          {t('save')}
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditingTitle(false)}>
+                          {t('cancel')}
+                        </Button>
+                      </form>
+                    )
+                  : (
+                      <>
+                        <h1 className="truncate font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
+                          {quizInfo.title}
+                        </h1>
+                        <button
+                          type="button"
+                          className="flex-shrink-0 text-base text-chalk-dim transition-colors hover:text-chalk"
+                          aria-label={t('rename')}
+                          title={t('rename')}
+                          onClick={() => {
+                            setTitleInput(quizInfo.title);
+                            setEditingTitle(true);
+                          }}
+                        >
+                          ✏️
+                        </button>
+                      </>
+                    )}
                 <Badge
                   variant={
                     quizInfo.status === 'published'
@@ -400,17 +567,17 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                         : 'info'
                   }
                 >
-                  {quizInfo.status}
+                  {tQuizzes(quizInfo.status)}
                 </Badge>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-text-muted">
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-base text-chalk-dim">
                 <span>
-                  Cập nhật:
+                  {t('updated_at')}
                   {' '}
                   {formatDate(quizInfo.updatedAt)}
                 </span>
                 <span>·</span>
-                <span className="font-mono text-xs">
+                <span className="font-mono text-sm">
                   ID:
                   {' '}
                   {quizInfo.id.slice(0, 8)}
@@ -419,11 +586,7 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Link href="/dashboard/quizzes">
-                <Button variant="ghost" size="sm">
-                  ← Quay lại
-                </Button>
-              </Link>
+              <Link href="/dashboard/quizzes" className={cn(s.btn, s.btnSm)}>{t('back')}</Link>
               {quizInfo.status === 'draft' && (
                 <Button
                   variant="primary"
@@ -431,14 +594,14 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                   onClick={() => void handlePublish()}
                   disabled={busy || rules.length === 0}
                 >
-                  Publish Quiz
+                  {t('publish_quiz')}
                 </Button>
               )}
             </div>
           </div>
           {error
             ? (
-                <div className="mt-3 rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+                <div className="mt-3 rounded-hand border border-chalk-pink/40 bg-chalk-pink/10 p-3 text-base text-chalk-pink">
                   {error}
                 </div>
               )
@@ -450,8 +613,8 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       {quizInfo && (
         <Card className="p-5 md:p-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-heading">
-              Tags (comma-separated)
+            <label className="text-base font-medium text-chalk">
+              {t('tags_label')}
             </label>
             <TagInput
               value={tagsInput}
@@ -470,24 +633,23 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       <Card className="p-5 md:p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-lg font-semibold text-text-heading">Các lượt chọn câu (rules hiện tại)</div>
-            <div className="mt-1 text-sm text-text-muted">
-              Tổng số câu dự kiến:
-              {' '}
-              <span className="font-mono text-base font-semibold text-text-heading">{totalRequestedFromRules}</span>
-              {' '}
-              câu
+            <div className="text-lg font-semibold text-chalk">{t('rules_title')}</div>
+            <div className="mt-1 text-base text-chalk-dim">
+              {t.rich('total_expected', {
+                count: totalRequestedFromRules,
+                strong: chunks => <span className="font-mono text-base font-semibold text-chalk">{chunks}</span>,
+              })}
             </div>
           </div>
         </div>
         {rules.length === 0
           ? (
               <div className="mt-6 py-8 text-center">
-                <div className="text-sm text-text-muted">
-                  Chưa có lượt chọn câu nào.
+                <div className="text-base text-chalk-dim">
+                  {t('no_rules')}
                 </div>
-                <div className="mt-2 text-xs text-text-muted">
-                  Bấm "Mở rộng" ở khung "Thêm lượt chọn câu mới" bên dưới để bắt đầu.
+                <div className="mt-2 text-sm text-chalk-dim">
+                  {t('no_rules_hint')}
                 </div>
               </div>
             )
@@ -499,25 +661,23 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                   return (
                     <div
                       key={r.id}
-                      className="rounded-md border border-border-subtle bg-bg-section transition-colors hover:border-border-strong"
+                      className="rounded-hand border border-chalk-faint bg-white/2 transition-colors hover:border-chalk-dim"
                     >
                       <div className="flex items-center justify-between gap-4 px-4 py-3">
                         <div className="grid min-w-0 flex-1 grid-cols-[auto_1fr_auto] items-center gap-4 md:grid-cols-[120px_100px_auto]">
-                          <Badge variant="info" className="text-xs">
+                          <Badge variant="info" className="text-sm">
                             {r.tag.name}
                           </Badge>
-                          <span className="text-sm font-medium text-text-heading">
-                            {questionCount}
-                            {' '}
-                            câu
+                          <span className="text-base font-medium text-chalk">
+                            {t('questions_count', { count: questionCount })}
                           </span>
-                          <Badge variant={ruleMode === 'variant' ? 'warning' : 'neutral'} className="text-xs">
-                            {ruleMode === 'variant' ? 'Variant-set' : 'Same-set'}
+                          <Badge variant={ruleMode === 'variant' ? 'warning' : 'neutral'} className="text-sm">
+                            {ruleMode === 'variant' ? t('variant_set') : t('same_set')}
                           </Badge>
                         </div>
                         <button
                           type="button"
-                          className="flex-shrink-0 text-sm text-text-muted transition-colors hover:text-danger"
+                          className="flex-shrink-0 text-base text-chalk-dim transition-colors hover:text-chalk-pink"
                           disabled={busy}
                           onClick={async () => {
                             setBusy(true);
@@ -530,10 +690,10 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                               const json = await res.json() as { error?: string };
                               if (!res.ok) {
                                 setError(json.error ?? 'DELETE_FAILED');
-                                setToast({ message: 'Không thể xóa lượt chọn', type: 'error' });
+                                setToast({ message: t('rule_delete_failed'), type: 'error' });
                                 return;
                               }
-                              setToast({ message: 'Đã xóa lượt chọn thành công', type: 'success' });
+                              setToast({ message: t('rule_deleted'), type: 'success' });
                               await load();
                             } finally {
                               setBusy(false);
@@ -552,11 +712,11 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
 
       {/* Quiz Settings - Time Limit */}
       <Card className="p-5 md:p-6">
-        <div className="text-lg font-semibold text-text-heading">Bước 1 - Cài đặt quiz</div>
+        <div className="text-lg font-semibold text-chalk">{t('step1_title')}</div>
         <div className="mt-4 grid gap-4">
           <div className="grid gap-2">
-            <label className="text-sm font-medium text-text-heading" htmlFor="durationMinutes">
-              Thời gian làm bài (phút)
+            <label className="text-base font-medium text-chalk" htmlFor="durationMinutes">
+              {t('duration_label')}
             </label>
             <div className="flex items-center gap-3">
               <Input
@@ -569,22 +729,24 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                   const val = e.target.value === '' ? null : Number(e.target.value);
                   setDurationMinutes(val);
                 }}
-                placeholder="VD: 60 (1 giờ)"
+                placeholder={t('duration_placeholder')}
                 disabled={busy}
                 className="w-32"
               />
-              <span className="text-sm text-text-muted">
+              <span className="text-base text-chalk-dim">
                 {durationMinutes !== null && durationMinutes > 0
                   ? (
                       <>
                         (
                         {durationMinutes >= 60
-                          ? `${Math.floor(durationMinutes / 60)} giờ ${durationMinutes % 60 > 0 ? `${durationMinutes % 60} phút` : ''}`
-                          : `${durationMinutes} phút`}
+                          ? (durationMinutes % 60 > 0
+                              ? t('hours_minutes', { hours: Math.floor(durationMinutes / 60), minutes: durationMinutes % 60 })
+                              : t('hours_only', { hours: Math.floor(durationMinutes / 60) }))
+                          : t('minutes_only', { minutes: durationMinutes })}
                         )
                       </>
                     )
-                  : 'Không giới hạn thời gian'}
+                  : t('no_time_limit')}
               </span>
               <Button
                 size="sm"
@@ -592,11 +754,74 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                 onClick={() => void saveDuration()}
                 disabled={busy || durationMinutes === null || durationMinutes < 1}
               >
-                Lưu
+                {t('save')}
               </Button>
             </div>
-            <div className="text-xs text-text-muted">
-              Thời gian tối đa để sinh viên hoàn thành quiz. Để trống nếu không giới hạn.
+            <div className="text-sm text-chalk-dim">
+              {t('duration_hint')}
+            </div>
+          </div>
+
+          {/* Chế độ chấm điểm */}
+          <div className="grid gap-2 border-t border-chalk-faint pt-4">
+            <label className="text-base font-medium text-chalk" htmlFor="scoringMode">
+              {t('scoring_label')}
+            </label>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <select
+                id="scoringMode"
+                className={cn(s.field, 'w-auto')}
+                value={scoringMode}
+                onChange={e => setScoringMode(e.target.value as ScoringMode)}
+                disabled={busy}
+              >
+                <option value="all_or_nothing">{t('scoring_mode_all_or_nothing')}</option>
+                <option value="partial">{t('scoring_mode_partial')}</option>
+                <option value="penalty">{t('scoring_mode_penalty')}</option>
+              </select>
+
+              {scoringMode === 'partial' && (
+                <select
+                  id="partialMethod"
+                  aria-label={t('scoring_partial_method_label')}
+                  className={cn(s.field, 'w-auto')}
+                  value={partialMethod}
+                  onChange={e => setPartialMethod(e.target.value as PartialMethod)}
+                  disabled={busy}
+                >
+                  <option value="edc">{t('scoring_partial_edc')}</option>
+                  <option value="halves">{t('scoring_partial_halves')}</option>
+                </select>
+              )}
+
+              {scoringMode === 'penalty' && (
+                <label className="flex items-center gap-2 text-base text-chalk-dim" htmlFor="penaltyPerWrong">
+                  {t('scoring_penalty_label')}
+                  <Input
+                    id="penaltyPerWrong"
+                    type="number"
+                    step="0.05"
+                    min={0}
+                    max={1}
+                    value={penaltyPerWrong}
+                    onChange={e => setPenaltyPerWrong(Number(e.target.value))}
+                    disabled={busy}
+                    className="w-24"
+                  />
+                </label>
+              )}
+
+              <Button size="sm" variant="ghost" onClick={() => void saveScoring()} disabled={busy}>
+                {t('save')}
+              </Button>
+            </div>
+            <div className="text-sm text-chalk-dim">
+              {scoringMode === 'all_or_nothing' && t('scoring_hint_all_or_nothing')}
+              {scoringMode === 'partial' && (partialMethod === 'edc' ? t('scoring_hint_partial_edc') : t('scoring_hint_partial_halves'))}
+              {scoringMode === 'penalty' && t('scoring_hint_penalty', { value: penaltyPerWrong })}
+            </div>
+            <div className="text-sm text-chalk-dim">
+              {t('scoring_apply_note')}
             </div>
           </div>
         </div>
@@ -604,34 +829,31 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
 
       {/* Rule Builder */}
       <Card className="p-5 md:p-6">
-        <div className="text-lg font-semibold text-text-heading">Bước 2 – Chọn câu cho đề (rule theo tag/pool)</div>
+        <div className="text-lg font-semibold text-chalk">{t('step2_title')}</div>
         <div className="mt-4 grid gap-4">
           {/* 1) Tỉ lệ dự phòng mặc định - Collapse/Expand */}
-          <div className="rounded-md border border-border-subtle bg-bg-section">
+          <div className="rounded-hand border border-chalk-faint bg-white/2">
             <button
               type="button"
-              className="flex w-full items-center justify-between px-4 py-2 text-left text-sm"
+              className="flex w-full items-center justify-between px-4 py-2 text-left text-base"
               onClick={() => setShowDefaultExtra(!showDefaultExtra)}
             >
-              <span className="text-text-muted">
-                Tỉ lệ câu dự phòng mặc định (quiz-level)
+              <span className="text-chalk-dim">
+                {t('default_extra_title')}
                 {' '}
-                <span className="text-xs">
-                  (Hiện tại:
-                  {' '}
-                  <span className="font-mono">{defaultExtraPercent}</span>
-                  )
+                <span className="text-sm">
+                  {t.rich('default_extra_current', { value: defaultExtraPercent, mono })}
                 </span>
               </span>
-              <span className="text-text-muted">
+              <span className="text-chalk-dim">
                 {showDefaultExtra ? '▲' : '▼'}
               </span>
             </button>
             {showDefaultExtra && (
-              <div className="border-t border-border-subtle px-4 py-3">
+              <div className="border-t border-chalk-faint px-4 py-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <label className="flex-1" htmlFor="defaultExtraPercent">
-                    <div className="text-sm font-medium text-text-heading">Tỉ lệ câu dự phòng mặc định (%)</div>
+                    <div className="text-base font-medium text-chalk">{t('default_extra_label')}</div>
                     <Input
                       id="defaultExtraPercent"
                       type="number"
@@ -645,7 +867,7 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                     />
                   </label>
                   <Button size="sm" variant="ghost" onClick={() => void saveDefaultExtra()} disabled={busy}>
-                    Lưu default
+                    {t('save_default')}
                   </Button>
                 </div>
               </div>
@@ -654,26 +876,26 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
 
           {/* 2) Chọn pools trước */}
           <div className="grid gap-2">
-            <div className="text-sm font-medium text-text-heading">Ngân hàng câu hỏi (pools) – có thể chọn nhiều</div>
+            <div className="text-base font-medium text-chalk">{t('pools_label')}</div>
             {pools.length > 5 && (
               <Input
-                placeholder="Tìm kiếm pool..."
+                placeholder={t('search_pool_placeholder')}
                 value={poolSearchQuery}
                 onChange={e => setPoolSearchQuery(e.target.value)}
-                className="text-sm"
+                className="text-base"
               />
             )}
-            <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border-subtle bg-bg-section p-3">
+            <div className="max-h-64 space-y-2 overflow-y-auto rounded-hand border border-chalk-faint bg-white/2 p-3">
               {pools.length === 0
                 ? (
-                    <div className="text-sm text-text-muted">Chưa có pool nào.</div>
+                    <div className="text-base text-chalk-dim">{t('no_pools')}</div>
                   )
                 : pools
                     .filter(p => poolSearchQuery.trim() === '' || p.name.toLowerCase().includes(poolSearchQuery.toLowerCase()))
                     .map(p => (
                       <label
                         key={p.id}
-                        className="flex cursor-pointer items-center gap-3 rounded-md border border-border-subtle bg-bg-card px-3 py-2 text-sm transition-colors hover:bg-bg-cardHover"
+                        className="flex cursor-pointer items-center gap-3 rounded-hand border border-chalk-faint bg-white/2 px-3 py-2 text-base transition-colors hover:bg-white/5"
                       >
                         <input
                           aria-label={`pool:${p.name}`}
@@ -691,8 +913,8 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                           className="h-4 w-4"
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium text-text-heading">{p.name}</div>
-                          <div className="text-xs text-text-muted">
+                          <div className="truncate font-medium text-chalk">{p.name}</div>
+                          <div className="text-sm text-chalk-dim">
                             <span className="font-mono">{p.visibility}</span>
                             {p.permission
                               ? (
@@ -707,44 +929,26 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                           </div>
                         </div>
                         {selectedPoolIds.includes(p.id) && (
-                          <span className="text-xs text-primary">✓</span>
+                          <span className="text-sm text-chalk-yellow">✓</span>
                         )}
                       </label>
                     ))}
             </div>
-            <div className="text-xs text-text-muted">
+            <div className="text-sm text-chalk-dim">
               {selectedPoolIds.length === 0
-                ? (
-                    <>
-                      Chưa chọn pool nào. Lượt này sẽ lấy câu từ
-                      {' '}
-                      <strong>tất cả pools</strong>
-                      .
-                    </>
-                  )
-                : (
-                    <>
-                      Đã chọn
-                      {' '}
-                      <strong>
-                        {selectedPoolIds.length}
-                        {' '}
-                        pool
-                      </strong>
-                      .
-                    </>
-                  )}
+                ? t.rich('no_pool_selected', { strong })
+                : t.rich('pools_selected', { count: selectedPoolIds.length, strong })}
             </div>
           </div>
 
           {/* 3) Sau đó chọn chủ đề (tag) bằng cách bấm chọn trong danh sách */}
-          <div className="grid gap-1 text-sm">
-            <div className="font-medium text-text-heading">Chủ đề (tag)</div>
+          <div className="grid gap-1 text-base">
+            <div className="font-medium text-chalk">{t('topic_label')}</div>
             <div className="flex flex-wrap gap-2">
               {tagSuggestions.length === 0
                 ? (
-                    <div className="text-xs text-text-muted">
-                      Chưa có tag nào. Thêm tag cho câu hỏi trong Question Bank trước.
+                    <div className="text-sm text-chalk-dim">
+                      {t('no_tags_hint')}
                     </div>
                   )
                 : tagSuggestions.map((s) => {
@@ -753,10 +957,10 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                       <button
                         key={s.id}
                         type="button"
-                        className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs ${
+                        className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm ${
                           selected
-                            ? 'border-primary bg-primary text-white'
-                            : 'border-border-subtle bg-bg-section text-text-body hover:bg-bg-card'
+                            ? 'text-ink-on-yellow border-chalk-yellow bg-chalk-yellow'
+                            : 'border-chalk-faint bg-white/2 text-chalk/85 hover:bg-white/2'
                         }`}
                         onClick={() => {
                           setTag(selected ? '' : s.normalizedName);
@@ -764,55 +968,41 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                         disabled={busy}
                       >
                         <span className="truncate">{s.name}</span>
-                        <span className="font-mono text-[10px] text-text-muted">
-                          (
-                          {s.questionCount}
-                          {' '}
-                          câu)
+                        <span className="font-mono text-sm text-chalk-dim">
+                          {t('tag_question_count', { count: s.questionCount })}
                         </span>
                       </button>
                     );
                   })}
             </div>
-            <div className="text-xs text-text-muted">
+            <div className="text-sm text-chalk-dim">
               {tag
-                ? (
-                    <>
-                      Đang chọn tag:
-                      {' '}
-                      <span className="font-mono">{tag}</span>
-                      . Mỗi lượt chọn hiện tại dùng 1 chủ đề chính.
-                    </>
-                  )
-                : 'Bấm chọn 1 chủ đề để áp dụng cho lượt chọn này.'}
+                ? t.rich('selected_tag', { tag, mono })
+                : t('select_tag_hint')}
             </div>
           </div>
 
-          <label className="grid gap-1 text-sm" htmlFor="ruleMode">
-            <div className="font-medium text-text-heading">Kiểu đề</div>
+          <label className="grid gap-1 text-base" htmlFor="ruleMode">
+            <div className="font-medium text-chalk">{t('mode_label')}</div>
             <select
               id="ruleMode"
-              className="rounded-md border border-border-subtle bg-bg-section px-3 py-2 text-text-body"
+              className={cn(s.field, 'w-auto')}
               value={mode}
               onChange={e => setMode(e.target.value as 'same' | 'variant')}
               disabled={busy}
             >
-              <option value="same">Một đề giống nhau cho tất cả sinh viên (same-set)</option>
-              <option value="variant">Nhiều phiên bản đề (variant-set)</option>
+              <option value="same">{t('mode_same')}</option>
+              <option value="variant">{t('mode_variant')}</option>
             </select>
           </label>
 
           {mode === 'same' && (
-            <label className="grid gap-1 text-sm" htmlFor="ruleCount">
-              <div className="font-medium text-text-heading">
-                Số câu cần lấy (nếu dùng một đề chung)
+            <label className="grid gap-1 text-base" htmlFor="ruleCount">
+              <div className="font-medium text-chalk">
+                {t('count_label')}
                 {tag && selectedTagInfo && (
-                  <span className="ml-2 text-xs font-normal text-text-muted">
-                    (Tối đa:
-                    {' '}
-                    <span className="font-mono">{selectedTagInfo.questionCount}</span>
-                    {' '}
-                    câu)
+                  <span className="ml-2 text-sm font-normal text-chalk-dim">
+                    {t.rich('max_questions', { count: selectedTagInfo.questionCount, mono })}
                   </span>
                 )}
               </div>
@@ -830,12 +1020,8 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                 max={tag && selectedTagInfo ? selectedTagInfo.questionCount : 500}
               />
               {tag && selectedTagInfo && count > selectedTagInfo.questionCount && (
-                <div className="text-xs text-warning">
-                  Số câu yêu cầu (
-                  {count}
-                  ) vượt quá số câu có sẵn (
-                  {selectedTagInfo.questionCount}
-                  ). Đã tự động điều chỉnh.
+                <div className="text-sm text-chalk-yellow">
+                  {t('count_adjusted', { requested: count, available: selectedTagInfo.questionCount })}
                 </div>
               )}
             </label>
@@ -844,15 +1030,12 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
           {mode === 'variant'
             ? (
                 <div className="grid gap-3 md:grid-cols-3">
-                  <label className="grid gap-1 text-sm" htmlFor="commonCount">
-                    <div className="font-medium text-text-heading">
-                      Số câu chung cho mọi đề (commonCount)
+                  <label className="grid gap-1 text-base" htmlFor="commonCount">
+                    <div className="font-medium text-chalk">
+                      {t('common_count_label')}
                       {tag && selectedTagInfo && (
-                        <span className="ml-2 text-xs font-normal text-text-muted">
-                          (Tối đa:
-                          {' '}
-                          <span className="font-mono">{selectedTagInfo.questionCount}</span>
-                          )
+                        <span className="ml-2 text-sm font-normal text-chalk-dim">
+                          {t.rich('max_short', { count: selectedTagInfo.questionCount, mono })}
                         </span>
                       )}
                     </div>
@@ -870,15 +1053,12 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                       max={tag && selectedTagInfo ? selectedTagInfo.questionCount : 500}
                     />
                   </label>
-                  <label className="grid gap-1 text-sm" htmlFor="variantCount">
-                    <div className="font-medium text-text-heading">
-                      Số câu riêng cho mỗi đề (variantCount)
+                  <label className="grid gap-1 text-base" htmlFor="variantCount">
+                    <div className="font-medium text-chalk">
+                      {t('variant_count_label')}
                       {tag && selectedTagInfo && (
-                        <span className="ml-2 text-xs font-normal text-text-muted">
-                          (Tối đa:
-                          {' '}
-                          <span className="font-mono">{selectedTagInfo.questionCount}</span>
-                          )
+                        <span className="ml-2 text-sm font-normal text-chalk-dim">
+                          {t.rich('max_short', { count: selectedTagInfo.questionCount, mono })}
                         </span>
                       )}
                     </div>
@@ -896,8 +1076,8 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                       max={tag && selectedTagInfo ? selectedTagInfo.questionCount : 500}
                     />
                   </label>
-                  <label className="grid gap-1 text-sm" htmlFor="extraPercent">
-                    <div className="font-medium text-text-heading">Tỉ lệ câu dự phòng cho đề biến thể (extraPercent)</div>
+                  <label className="grid gap-1 text-base" htmlFor="extraPercent">
+                    <div className="font-medium text-chalk">{t('extra_percent_label')}</div>
                     <Input
                       id="extraPercent"
                       type="number"
@@ -914,7 +1094,7 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
             : null}
           {mode === 'variant'
             ? (
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-center gap-2 text-base">
                   <input
                     type="checkbox"
                     checked={useDefaultExtra}
@@ -922,29 +1102,23 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                     disabled={busy}
                   />
                   <span>
-                    Dùng default extraPercent của quiz (
-                    <span className="font-mono">{defaultExtraPercent}</span>
-                    )
+                    {t.rich('use_default_extra', { value: defaultExtraPercent, mono })}
                   </span>
                 </label>
               )
             : null}
 
-          <div className="mt-2 text-xs">
-            <div className="text-text-muted">
-              Lượt này dự kiến sẽ lấy
-              {' '}
-              <span className="font-mono">{projectedQuestions}</span>
-              {' '}
-              câu từ các pool / tag đã chọn (thực tế còn phụ thuộc vào số câu có trong ngân hàng).
+          <div className="mt-2 text-sm">
+            <div className="text-chalk-dim">
+              {t.rich('projected', { count: projectedQuestions, mono })}
             </div>
             {tag && selectedTagInfo && projectedQuestions > selectedTagInfo.questionCount && (
-              <div className="mt-1 text-warning">
-                ⚠️ Số câu yêu cầu (
-                <span className="font-mono">{projectedQuestions}</span>
-                ) vượt quá số câu có sẵn trong tag này (
-                <span className="font-mono">{selectedTagInfo.questionCount}</span>
-                ). Vui lòng điều chỉnh.
+              <div className="mt-1 text-chalk-yellow">
+                {t.rich('projected_exceeds', {
+                  requested: projectedQuestions,
+                  available: selectedTagInfo.questionCount,
+                  mono,
+                })}
               </div>
             )}
           </div>
@@ -959,7 +1133,7 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
               }
               onClick={() => void saveRule()}
             >
-              {busy ? 'Đang lưu...' : 'Xong lượt chọn này'}
+              {busy ? t('saving') : t('finish_selection')}
             </Button>
           </div>
         </div>
@@ -968,52 +1142,35 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       {/* Preview Card - Hiển thị sau cùng */}
       <Card className="p-5 md:p-6">
         <div className="flex items-center justify-between">
-          <div className="text-lg font-semibold text-text-heading">Preview đủ/thiếu theo rule</div>
+          <div className="text-lg font-semibold text-chalk">{t('preview_title')}</div>
           <Button size="sm" variant="ghost" onClick={() => void loadPreview()} disabled={busy}>
-            Preview
+            {t('preview')}
           </Button>
         </div>
         {preview
           ? (
               <div className="mt-3 overflow-x-auto">
-                <div className="mb-2 text-sm text-text-heading">
-                  Tổng số câu yêu cầu:
-                  {' '}
-                  <span className="font-mono">{preview.totals.totalRequested}</span>
-                  {' '}
-                  · Tổng số câu cần lấy (có dự phòng):
-                  {' '}
-                  <span className="font-mono">{preview.totals.totalPoolSize}</span>
-                  {' '}
-                  · Thiếu:
-                  {' '}
-                  <span className="font-mono">{preview.totals.totalShortage}</span>
+                <div className="mb-2 text-base text-chalk">
+                  {t.rich('preview_totals', {
+                    requested: preview.totals.totalRequested,
+                    poolSize: preview.totals.totalPoolSize,
+                    shortage: preview.totals.totalShortage,
+                    mono,
+                  })}
                 </div>
-                <div className="mb-2 text-xs text-text-muted">
-                  <strong>Giải thích:</strong>
-                  {' '}
-                  Với
-                  {' '}
-                  <strong>same-set</strong>
-                  : "Số câu cần lấy" = số câu yêu cầu (không có dự phòng).
-                  {' '}
-                  Với
-                  {' '}
-                  <strong>variant-set</strong>
-                  : "Số câu cần lấy" = số câu yêu cầu + phần dự phòng (extraPercent) để đảm bảo có đủ câu tạo nhiều variant.
-                  {' '}
-                  "Thiếu" = số câu cần lấy - số câu có sẵn trong pool.
+                <div className="mb-2 text-sm text-chalk-dim">
+                  {t.rich('preview_explanation', { strong })}
                 </div>
                 <TableWrap>
                   <Table>
                     <thead>
-                      <tr className="text-text-muted">
-                        <th className="border-b p-2">Tag</th>
-                        <th className="border-b p-2">Yêu cầu</th>
-                        <th className="border-b p-2">Cần lấy (có dự phòng)</th>
-                        <th className="border-b p-2">Có sẵn</th>
-                        <th className="border-b p-2">Thiếu</th>
-                        <th className="border-b p-2">Pools</th>
+                      <tr className="text-chalk-dim">
+                        <th className="border-b p-2">{t('col_tag')}</th>
+                        <th className="border-b p-2">{t('col_requested')}</th>
+                        <th className="border-b p-2">{t('col_to_fetch')}</th>
+                        <th className="border-b p-2">{t('col_available')}</th>
+                        <th className="border-b p-2">{t('col_missing')}</th>
+                        <th className="border-b p-2">{t('col_pools')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1021,17 +1178,17 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                         <tr
                           key={r.ruleId}
                           className={r.shortage > 0
-                            ? 'bg-warning/10'
-                            : 'odd:bg-bg-elevated'}
+                            ? 'bg-chalk-yellow/10'
+                            : 'odd:bg-white/5'}
                         >
                           <td className="p-2 font-mono">{r.tag.normalizedName}</td>
                           <td className="p-2 font-mono">{r.requested}</td>
                           <td className="p-2 font-mono">{r.poolSize}</td>
                           <td className="p-2 font-mono">{r.available}</td>
                           <td className="p-2 font-mono">{r.shortage}</td>
-                          <td className="p-2 text-xs">
+                          <td className="p-2 text-sm">
                             {r.poolIds.length === 0
-                              ? <span className="font-mono">ALL</span>
+                              ? <span className="font-mono">{t('all_pools')}</span>
                               : r.poolIds.map(id => poolById.get(id)?.name ?? id).join(', ')}
                           </td>
                         </tr>
@@ -1042,11 +1199,42 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
               </div>
             )
           : (
-              <div className="mt-2 text-sm text-text-muted">
-                Bấm "Preview" để kiểm tra đủ/thiếu câu theo từng tag/pool trước khi tạo session.
+              <div className="mt-2 text-base text-chalk-dim">
+                {t('preview_hint')}
               </div>
             )}
       </Card>
+
+      {/* Danger Zone */}
+      {quizInfo && (
+        <Card className="border-chalk-pink/40 p-5 md:p-6">
+          <div className="text-lg font-semibold text-chalk-pink">{t('danger_zone')}</div>
+          <div className="mt-4 grid gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-base font-medium text-chalk">
+                  {quizInfo.status === 'archived' ? t('unarchive_title') : t('archive_title')}
+                </div>
+                <div className="text-sm text-chalk-dim">
+                  {quizInfo.status === 'archived' ? t('unarchive_hint') : t('archive_hint')}
+                </div>
+              </div>
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => void setArchived(quizInfo.status !== 'archived')}>
+                {quizInfo.status === 'archived' ? t('unarchive_button') : t('archive_button')}
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2 border-t border-chalk-faint pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-base font-medium text-chalk">{t('delete_quiz_title')}</div>
+                <div className="text-sm text-chalk-dim">{t('delete_quiz_hint')}</div>
+              </div>
+              <Button size="sm" variant="danger" disabled={busy} onClick={() => void deleteQuiz()}>
+                {t('delete_quiz_button')}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Toast Notification */}
       {toast && (

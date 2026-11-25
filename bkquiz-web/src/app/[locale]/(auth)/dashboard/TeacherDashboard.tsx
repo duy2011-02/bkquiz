@@ -1,9 +1,10 @@
-import Link from 'next/link';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import Link from 'next/link';
+import s from '@/components/chalk/chalk.module.css';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { prisma } from '@/server/prisma';
+import { cn } from '@/utils/cn';
 
 type TeacherDashboardProps = {
   userId: string;
@@ -75,8 +76,10 @@ export async function TeacherDashboard(props: TeacherDashboardProps) {
   const recentClasses = classes.slice(0, 5);
 
   function formatDate(date: Date | null) {
-    if (!date) return '—';
-    return new Intl.DateTimeFormat('vi-VN', {
+    if (!date) {
+      return '—';
+    }
+    return new Intl.DateTimeFormat(locale, {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
@@ -84,287 +87,220 @@ export async function TeacherDashboard(props: TeacherDashboardProps) {
     }).format(date);
   }
 
+  const kpis = [
+    { href: '/dashboard/classes', label: t('classes_label'), value: classes.length, tag: <Badge variant="neutral">{t('tag_active')}</Badge>, desc: t('classes_description') },
+    { href: '/dashboard/quizzes', label: t('quizzes_label'), value: quizCount, tag: <Badge variant="info">{t('tag_total')}</Badge>, desc: t('quizzes_description') },
+    {
+      href: '/dashboard/sessions',
+      label: t('active_sessions_label'),
+      value: activeSessionCount,
+      tag: (
+        <Badge variant={activeSessionCount > 0 ? 'success' : 'neutral'}>
+          {activeSessionCount > 0 ? t('tag_running') : t('tag_idle')}
+        </Badge>
+      ),
+      desc: t('active_sessions_description'),
+    },
+  ];
+
+  const sectionTitle = cn(s.chalk, 'text-xl');
+
   return (
-    <div className="space-y-7 animate-fadeIn">
-      {/* Header */}
-      <Card className="p-6 animate-slideUp">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-sm text-text-muted">{t('header_subtitle')}</div>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-text-heading">
-              {t('header_title')}
-            </h1>
-            <div className="mt-2 text-sm text-text-muted">
-              {t('header_description')}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Link href="/dashboard/classes/">
-              <Button variant="primary">{t('manage_classes')}</Button>
-            </Link>
-            <Link href="/dashboard/quizzes/">
-              <Button variant="ghost">{t('manage_quizzes')}</Button>
-            </Link>
-            <Link href="/dashboard/question-bank/">
-              <Button variant="ghost">{t('question_bank')}</Button>
-            </Link>
-          </div>
+    <div className="flex flex-col gap-6">
+      {/* Header written on the board */}
+      <header className={s.header}>
+        <div className="min-w-0">
+          <p className={s.dim}>{t('header_subtitle')}</p>
+          <h1 className={cn(s.title, s.script, s.chalk)}>{t('header_title')}</h1>
+          <p className={cn(s.meta, s.dim, 'mt-1')}>{t('header_description')}</p>
         </div>
-      </Card>
-
-      {/* Quick Actions Bar */}
-      <Card className="p-5 md:p-6 bg-bg-card/50 animate-slideUp" style={{ animationDelay: '50ms' }}>
-        <div className="text-sm font-semibold text-text-heading mb-3">{t('quick_actions')}</div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/dashboard/classes">
-            <Button variant="primary" size="sm" className="hover:scale-105">
-              {t('create_class')}
-            </Button>
-          </Link>
-          <Link href="/dashboard/quizzes">
-            <Button variant="primary" size="sm" className="hover:scale-105">
-              {t('create_quiz')}
-            </Button>
-          </Link>
-          <Link href="/dashboard/question-bank">
-            <Button variant="ghost" size="sm" className="hover:scale-105">
-              {t('import_pool')}
-            </Button>
-          </Link>
+        <div className={s.actionsGroup}>
+          <Link href="/dashboard/classes/" className={cn(s.btn, s.btnPrimary)}>{t('manage_classes')}</Link>
+          <Link href="/dashboard/quizzes/" className={s.btn}>{t('manage_quizzes')}</Link>
+          <Link href="/dashboard/question-bank/" className={s.btn}>{t('question_bank')}</Link>
         </div>
-      </Card>
+      </header>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-3 animate-slideUp" style={{ animationDelay: '100ms' }}>
-        <Link href="/dashboard/classes">
-          <Card interactive className="p-6 cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg">
-            <div className="text-sm text-text-muted">{t('classes_label')}</div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <div className="text-3xl font-semibold text-text-heading">{classes.length}</div>
-              <Badge variant="neutral">active</Badge>
-            </div>
-            <div className="mt-2 text-xs text-text-muted">
-              {t('classes_description')}
-            </div>
-          </Card>
-        </Link>
+      <div className={s.rule} />
 
-        <Link href="/dashboard/quizzes">
-          <Card interactive className="p-6 cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg">
-            <div className="text-sm text-text-muted">{t('quizzes_label')}</div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <div className="text-3xl font-semibold text-text-heading">{quizCount}</div>
-              <Badge variant="info">total</Badge>
-            </div>
-            <div className="mt-2 text-xs text-text-muted">
-              {t('quizzes_description')}
-            </div>
-          </Card>
-        </Link>
+      {/* Quick actions */}
+      <section className="flex flex-wrap items-center gap-3">
+        <span className={s.dim}>{t('quick_actions')}</span>
+        <Link href="/dashboard/classes" className={cn(s.btn, s.solidBtn)}>{t('create_class')}</Link>
+        <Link href="/dashboard/quizzes" className={cn(s.btn, s.btnPrimary)}>{t('create_quiz')}</Link>
+        <Link href="/dashboard/question-bank" className={s.btn}>{t('import_pool')}</Link>
+      </section>
 
-        <Link href="/dashboard/sessions">
-          <Card interactive className="p-6 cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg">
-            <div className="text-sm text-text-muted">{t('active_sessions_label')}</div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <div className="text-3xl font-semibold text-text-heading">{activeSessionCount}</div>
-              <Badge variant={activeSessionCount > 0 ? 'success' : 'neutral'}>
-                {activeSessionCount > 0 ? 'running' : 'idle'}
-              </Badge>
-            </div>
-            <div className="mt-2 text-xs text-text-muted">
-              {t('active_sessions_description')}
-            </div>
-          </Card>
-        </Link>
+      {/* KPIs */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {kpis.map(k => (
+          <Link key={k.href} href={k.href} className="block">
+            <Card interactive className="h-full p-5">
+              <div className={s.dim}>{k.label}</div>
+              <div className="mt-1 flex items-baseline gap-3">
+                <span className={cn(s.script, s.chalk, 'text-5xl leading-none font-bold')}>{k.value}</span>
+                {k.tag}
+              </div>
+              <p className={cn(s.dim, 'mt-2')}>{k.desc}</p>
+            </Card>
+          </Link>
+        ))}
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-4 lg:grid-cols-3 animate-slideUp" style={{ animationDelay: '150ms' }}>
-        {/* Recent Classes */}
-        <Card className="p-6 lg:col-span-2">
-          <div className="flex items-center justify-between">
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Recent classes */}
+        <section className="flex flex-col gap-3 lg:col-span-2">
+          <div className="flex items-end justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-text-heading">{t('recent_classes_title')}</div>
-              <div className="mt-1 text-sm text-text-muted">
-                {t('recent_classes_description')}
-              </div>
+              <h2 className={sectionTitle}>{t('recent_classes_title')}</h2>
+              <p className={s.dim}>{t('recent_classes_description')}</p>
             </div>
-            <Link href="/dashboard/classes">
-              <Button variant="ghost" size="sm">
-                {t('view_all')}
-              </Button>
-            </Link>
+            <Link href="/dashboard/classes" className={cn(s.btn, s.btnSm)}>{t('view_all')}</Link>
           </div>
-          <div className="mt-4">
-            {recentClasses.length === 0
-              ? (
-                  <div className="rounded-md border border-dashed border-border-subtle px-4 py-8 text-center">
-                    <div className="text-sm text-text-muted">
-                      {t('no_classes_yet')}
-                    </div>
-                    <div className="mt-2">
-                      <Link href="/dashboard/classes">
-                        <Button variant="primary" size="sm">
-                          {t('create_first_class')}
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                )
-              : (
-                  <div className="space-y-3">
-                    {recentClasses.map((c, idx) => (
-                      <Link key={c.id} href={`/dashboard/classes/${c.id}`}>
-                        <div
-                          className="flex items-center justify-between gap-4 rounded-md border border-border-subtle bg-bg-section px-4 py-3 transition-all duration-200 hover:translate-x-1 hover:shadow-md hover:border-primary/30"
-                          style={{ animationDelay: `${idx * 30}ms` }}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium text-text-heading">{c.name}</div>
-                            <div className="mt-1 text-xs text-text-muted">
-                              <span className="font-mono">{c.classCode}</span>
-                            </div>
-                          </div>
-                          <span className="text-xs text-text-muted">→</span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-          </div>
-        </Card>
-
-        {/* Active Sessions Widget */}
-        <Card className="p-6">
-          <div className="text-lg font-semibold text-text-heading mb-4">{t('active_sessions_widget_title')}</div>
-          {activeSessions.length === 0
+          {recentClasses.length === 0
             ? (
-                <div className="text-center py-6 text-sm text-text-muted">
-                  {t('no_sessions_running')}
-                </div>
+                <Card variant="note" className={cn(s.dim, 'flex flex-col items-start gap-3')}>
+                  <span>{t('no_classes_yet')}</span>
+                  <Link href="/dashboard/classes" className={cn(s.btn, s.btnPrimary)}>{t('create_first_class')}</Link>
+                </Card>
               )
             : (
-                <div className="space-y-3">
-                  {activeSessions.map((session, idx) => (
-                    <Link key={session.id} href={`/dashboard/sessions/${session.id}/teacher`}>
-                      <div
-                        className="rounded-md border border-border-subtle bg-bg-section px-3 py-2.5 transition-all duration-200 hover:translate-x-1 hover:shadow-md hover:border-primary/30 hover:bg-primary/5"
-                        style={{ animationDelay: `${idx * 50}ms` }}
-                      >
-                        <div className="text-sm font-medium text-text-heading truncate">
-                          {session.quiz.title}
-                        </div>
-                        <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
-                          <span>
-                            {session._count.attempts}
-                            {' '}
-                            {t('students')}
-                          </span>
-                          <span>
-                            {formatDate(session.startedAt)}
-                          </span>
-                        </div>
-                      </div>
-                    </Link>
+                <ul className="flex flex-col gap-2">
+                  {recentClasses.map(c => (
+                    <li key={c.id}>
+                      <Link href={`/dashboard/classes/${c.id}`} className="block">
+                        <Card interactive className="flex items-center justify-between gap-4 px-4 py-3">
+                          <div className="min-w-0">
+                            <div className={cn(s.chalk, 'truncate text-lg')}>{c.name}</div>
+                            <div className={cn(s.dim, 'font-mono text-sm')}>{c.classCode}</div>
+                          </div>
+                          <span className={s.dim} aria-hidden="true">→</span>
+                        </Card>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+        </section>
+
+        {/* Active sessions */}
+        <section className="flex flex-col gap-3">
+          <h2 className={sectionTitle}>{t('active_sessions_widget_title')}</h2>
+          {activeSessions.length === 0
+            ? (
+                <Card variant="note" className={s.dim}>{t('no_sessions_running')}</Card>
+              )
+            : (
+                <ul className="flex flex-col gap-2">
+                  {activeSessions.map(session => (
+                    <li key={session.id}>
+                      <Link href={`/dashboard/sessions/${session.id}/teacher`} className="block">
+                        <Card interactive className="px-4 py-3">
+                          <div className={cn(s.chalk, 'truncate text-lg')}>{session.quiz.title}</div>
+                          <div className={cn(s.dim, 'flex items-center justify-between gap-2 text-sm')}>
+                            <span className={s.green}>
+                              {session._count.attempts}
+                              {' '}
+                              {t('students')}
+                            </span>
+                            <span>{formatDate(session.startedAt)}</span>
+                          </div>
+                        </Card>
+                      </Link>
+                    </li>
                   ))}
                   {activeSessionCount > activeSessions.length && (
-                    <Link href="/dashboard/sessions">
-                      <Button variant="ghost" size="sm" className="w-full">
+                    <li>
+                      <Link href="/dashboard/sessions" className={cn(s.btn, 'w-full')}>
                         {t('view_all_sessions', { count: activeSessionCount })}
-                      </Button>
-                    </Link>
+                      </Link>
+                    </li>
                   )}
-                </div>
+                </ul>
               )}
-        </Card>
+        </section>
       </div>
 
-      {/* Quiz Status Overview */}
+      {/* Quiz status overview */}
       {(draftQuizzes > 0 || publishedQuizzes > 0 || quizzesWithoutRules > 0) && (
-        <Card className="p-6 animate-slideUp" style={{ animationDelay: '200ms' }}>
-          <div className="text-lg font-semibold text-text-heading mb-4">{t('quiz_status_title')}</div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-border-subtle bg-bg-section px-4 py-3">
-              <div className="text-xs text-text-muted">{t('draft')}</div>
-              <div className="mt-1 text-2xl font-semibold text-text-heading">{draftQuizzes}</div>
-            </div>
-            <div className="rounded-md border border-border-subtle bg-bg-section px-4 py-3">
-              <div className="text-xs text-text-muted">{t('published')}</div>
-              <div className="mt-1 text-2xl font-semibold text-text-heading">{publishedQuizzes}</div>
-            </div>
+        <section className="flex flex-col gap-3">
+          <h2 className={sectionTitle}>{t('quiz_status_title')}</h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Card className="px-4 py-3">
+              <div className={s.dim}>{t('draft')}</div>
+              <div className={cn(s.script, s.chalk, 'text-4xl font-bold')}>{draftQuizzes}</div>
+            </Card>
+            <Card className="px-4 py-3">
+              <div className={s.dim}>{t('published')}</div>
+              <div className={cn(s.script, s.green, 'text-4xl font-bold')}>{publishedQuizzes}</div>
+            </Card>
             {quizzesWithoutRules > 0 && (
-              <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3">
-                <div className="text-xs text-warning">{t('no_rules')}</div>
-                <div className="mt-1 text-2xl font-semibold text-warning">{quizzesWithoutRules}</div>
-              </div>
+              <Card variant="note" className={cn(s.yellow, 'px-4 py-3')}>
+                <div>{t('no_rules')}</div>
+                <div className={cn(s.script, 'text-4xl font-bold')}>{quizzesWithoutRules}</div>
+              </Card>
             )}
           </div>
-        </Card>
+        </section>
       )}
 
-      {/* Getting Started (Collapsible) */}
-      <Card className="p-5 border-dashed animate-slideUp transition-all duration-300" style={{ animationDelay: '250ms' }}>
-        <details className="group">
-          <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-text-muted list-none transition-colors hover:text-text-heading">
-            <div className="flex items-center justify-between">
-              <span>{t('getting_started')}</span>
-              <span className="text-text-muted group-open:rotate-180 transition-transform duration-200">▼</span>
-            </div>
-          </summary>
-          <ol className="mt-3 space-y-1 text-xs text-text-body animate-fadeIn">
-            <li>
-              <span className="font-mono text-text-muted">1.</span>
-              {' '}
-              {t('getting_started_step1')}{' '}
-              <Link href="/dashboard/classes" className="text-primary hover:underline">
-                {tClasses('my_classes')}
-              </Link>
-              .
-            </li>
-            <li>
-              <span className="font-mono text-text-muted">2.</span>
-              {' '}
-              {t('getting_started_step2')}{' '}
-              <span className="font-medium">{t('question_pool')}</span>
-              {' '}
-              in{' '}
-              <Link href="/dashboard/question-bank" className="text-primary hover:underline">
-                {tQuestionBank('title')}
-              </Link>
-              .
-            </li>
-            <li>
-              <span className="font-mono text-text-muted">3.</span>
-              {' '}
-              {t('getting_started_step3')}{' '}
-              <span className="font-medium">{t('quiz')}</span>
-              {' '}
-              {t('for_each_class_and_configure')}{' '}
-              <span className="font-mono">{t('rules')}</span>
-              {' '}
-              {t('by_tag_pool')}
-            </li>
-            <li>
-              <span className="font-mono text-text-muted">4.</span>
-              {' '}
-              {t('getting_started_step4')}{' '}
-              <Link href="/dashboard/sessions" className="text-primary hover:underline">
-                {tSessions('title')}
-              </Link>
-              {' '}
-              {t('to')}{' '}
-              <span className="font-medium">{t('start_session')}</span>
-              {' '}
-              {t('and_display')}{' '}
-              <span className="font-mono">{t('Teacher_Screen')}</span>
-              {' '}
-              {t('for_students')}
-            </li>
-          </ol>
-        </details>
-      </Card>
+      {/* Getting started */}
+      <details className={cn(s.note, s.dim, 'group')}>
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 hover:text-chalk">
+          <span>{t('getting_started')}</span>
+          <span className="transition-transform group-open:rotate-180" aria-hidden="true">▾</span>
+        </summary>
+        <ol className={cn(s.modalText, 'mt-2 flex list-decimal flex-col gap-1 pl-6')}>
+          <li>
+            {t('getting_started_step1')}
+            {' '}
+            <Link href="/dashboard/classes" className={cn(s.yellow, 'underline underline-offset-4')}>
+              {tClasses('my_classes')}
+            </Link>
+            .
+          </li>
+          <li>
+            {t('getting_started_step2')}
+            {' '}
+            <span className={s.chalk}>{t('question_pool')}</span>
+            {' '}
+            {t('in')}
+            {' '}
+            <Link href="/dashboard/question-bank" className={cn(s.yellow, 'underline underline-offset-4')}>
+              {tQuestionBank('title')}
+            </Link>
+            .
+          </li>
+          <li>
+            {t('getting_started_step3')}
+            {' '}
+            <span className={s.chalk}>{t('quiz')}</span>
+            {' '}
+            {t('for_each_class_and_configure')}
+            {' '}
+            <span className="font-mono">{t('rules')}</span>
+            {' '}
+            {t('by_tag_pool')}
+          </li>
+          <li>
+            {t('getting_started_step4')}
+            {' '}
+            <Link href="/dashboard/sessions" className={cn(s.yellow, 'underline underline-offset-4')}>
+              {tSessions('title')}
+            </Link>
+            {' '}
+            {t('to')}
+            {' '}
+            <span className={s.chalk}>{t('start_session')}</span>
+            {' '}
+            {t('and_display')}
+            {' '}
+            <span className="font-mono">{t('Teacher_Screen')}</span>
+            {' '}
+            {t('for_students')}
+          </li>
+        </ol>
+      </details>
     </div>
   );
 }
-

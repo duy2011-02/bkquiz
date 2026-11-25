@@ -1,7 +1,9 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import Link from 'next/link';
+import s from '@/components/chalk/chalk.module.css';
 import { LocaleSwitcher } from '@/components/LocaleSwitcher';
 import { BaseTemplate } from '@/templates/BaseTemplate';
+import { cn } from '@/utils/cn';
 
 export default async function Layout(props: {
   children: React.ReactNode;
@@ -15,56 +17,38 @@ export default async function Layout(props: {
   });
 
   return (
-    <>
-      <BaseTemplate
-        leftNav={(
-          <>
-            <li>
-              <Link
-                href="/"
-                className="rounded-md px-3 py-2 text-text-muted hover:bg-bg-card hover:text-text-heading"
-              >
-                {t('home_link')}
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/dashboard/"
-                className="rounded-md px-3 py-2 text-text-muted hover:bg-bg-card hover:text-text-heading"
-              >
-                Dashboard
-              </Link>
-            </li>
-          </>
-        )}
-        rightNav={(
-          <>
-            <li>
-              <Link
-                href="/sign-in/"
-                className="rounded-md px-3 py-2 text-text-muted hover:bg-bg-card hover:text-text-heading"
-              >
-                {t('sign_in_link')}
-              </Link>
-            </li>
-
-            <li>
-              <Link
-                href="/sign-up/"
-                className="rounded-md px-3 py-2 text-text-muted hover:bg-bg-card hover:text-text-heading"
-              >
-                {t('sign_up_link')}
-              </Link>
-            </li>
-
-            <li>
-              <LocaleSwitcher />
-            </li>
-          </>
-        )}
-      >
-        <div className="text-base">{props.children}</div>
-      </BaseTemplate>
-    </>
+    <BaseTemplate
+      leftNav={(
+        <>
+          <li>
+            <Link href="/" className={s.navLink}>
+              {t('home_link')}
+            </Link>
+          </li>
+          <li>
+            <Link href="/dashboard/" className={s.navLink}>
+              Dashboard
+            </Link>
+          </li>
+        </>
+      )}
+      rightNav={(
+        <>
+          <li>
+            <Link href="/sign-in/" className={cn(s.btn, s.btnPrimary)}>
+              {t('sign_in_link')}
+            </Link>
+          </li>
+          <li>
+            <Link href="/sign-up/" className={s.btn}>
+              {t('sign_up_link')}
+            </Link>
+          </li>
+        </>
+      )}
+      ledge={<LocaleSwitcher />}
+    >
+      {props.children}
+    </BaseTemplate>
   );
 }

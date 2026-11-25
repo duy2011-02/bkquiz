@@ -1,7 +1,8 @@
 'use client';
 
-import { Card } from '@/components/ui/Card';
 import type { Member, Session } from '../types';
+import { useTranslations } from 'next-intl';
+import { Card } from '@/components/ui/Card';
 
 type StatsCardsProps = {
   members: Member[];
@@ -11,53 +12,52 @@ type StatsCardsProps = {
 
 export function StatsCards(props: StatsCardsProps) {
   const { members, sessions, isOwner } = props;
+  const t = useTranslations('Classes.detail');
 
   return (
     <div
-      className="grid gap-4 md:grid-cols-4 animate-slideUp"
-      style={{ animationDelay: '100ms' }}
+      className="grid gap-4 md:grid-cols-4"
     >
       <Card
-        className={`p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg ${
-          isOwner ? '' : 'border-indigo-500/20'
+        className={`p-4 transition-all duration-200   ${
+          isOwner ? '' : 'border-chalk-blue/20'
         }`}
       >
-        <div className="text-xs text-text-muted">Thành viên</div>
-        <div className={`mt-1 text-2xl font-semibold ${isOwner ? 'text-text-heading' : 'text-indigo-400'}`}>
+        <div className="text-sm text-chalk-dim">{t('stat_members')}</div>
+        <div className={`mt-1 text-2xl font-semibold ${isOwner ? 'text-chalk' : 'text-chalk-blue'}`}>
           {members.length}
         </div>
       </Card>
       <Card
-        className={`p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg ${
-          isOwner ? '' : 'border-indigo-500/20'
+        className={`p-4 transition-all duration-200   ${
+          isOwner ? '' : 'border-chalk-blue/20'
         }`}
       >
-        <div className="text-xs text-text-muted">Tổng sessions</div>
-        <div className={`mt-1 text-2xl font-semibold ${isOwner ? 'text-text-heading' : 'text-indigo-400'}`}>
+        <div className="text-sm text-chalk-dim">{t('stat_total_sessions')}</div>
+        <div className={`mt-1 text-2xl font-semibold ${isOwner ? 'text-chalk' : 'text-chalk-blue'}`}>
           {sessions.length}
         </div>
       </Card>
       <Card
-        className={`p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg ${
-          isOwner ? '' : 'border-indigo-500/20'
+        className={`p-4 transition-all duration-200   ${
+          isOwner ? '' : 'border-chalk-blue/20'
         }`}
       >
-        <div className="text-xs text-text-muted">Active sessions</div>
-        <div className={`mt-1 text-2xl font-semibold ${isOwner ? 'text-text-heading' : 'text-indigo-400'}`}>
+        <div className="text-sm text-chalk-dim">{t('stat_active_sessions')}</div>
+        <div className={`mt-1 text-2xl font-semibold ${isOwner ? 'text-chalk' : 'text-chalk-blue'}`}>
           {sessions.filter(s => s.status === 'active').length}
         </div>
       </Card>
       <Card
-        className={`p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg ${
-          isOwner ? '' : 'border-indigo-500/20'
+        className={`p-4 transition-all duration-200   ${
+          isOwner ? '' : 'border-chalk-blue/20'
         }`}
       >
-        <div className="text-xs text-text-muted">Ended sessions</div>
-        <div className={`mt-1 text-2xl font-semibold ${isOwner ? 'text-text-heading' : 'text-indigo-400'}`}>
+        <div className="text-sm text-chalk-dim">{t('stat_ended_sessions')}</div>
+        <div className={`mt-1 text-2xl font-semibold ${isOwner ? 'text-chalk' : 'text-chalk-blue'}`}>
           {sessions.filter(s => s.status === 'ended').length}
         </div>
       </Card>
     </div>
   );
 }
-

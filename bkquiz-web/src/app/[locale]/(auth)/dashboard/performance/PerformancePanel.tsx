@@ -61,13 +61,13 @@ export function PerformancePanel() {
     return (
       <div className="space-y-7">
         <Card className="p-6">
-          <Skeleton className="h-8 w-48 mb-4" />
+          <Skeleton className="mb-4 h-8 w-48" />
           <Skeleton className="h-4 w-96" />
         </Card>
         <div className="grid gap-4 md:grid-cols-3">
           {[1, 2, 3].map(i => (
             <Card key={i} className="p-6">
-              <Skeleton className="h-6 w-24 mb-2" />
+              <Skeleton className="mb-2 h-6 w-24" />
               <Skeleton className="h-8 w-16" />
             </Card>
           ))}
@@ -79,8 +79,8 @@ export function PerformancePanel() {
   if (error) {
     return (
       <Card className="p-6">
-        <div className="text-sm text-text-muted">{t('error')}</div>
-        <div className="mt-2 text-text-body">
+        <div className="text-base text-chalk-dim">{t('error')}</div>
+        <div className="mt-2 text-chalk/85">
           {error}
         </div>
       </Card>
@@ -94,14 +94,14 @@ export function PerformancePanel() {
   return (
     <div className="space-y-7">
       {/* Header */}
-      <Card className="p-6 border-indigo-500/30">
+      <Card className="border-chalk-blue/30 p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="text-sm text-indigo-400 uppercase tracking-wide">{t('title')}</div>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-text-heading">
+            <div className="text-base text-chalk-blue">{t('title')}</div>
+            <h1 className="mt-1 font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
               {t('subtitle')}
             </h1>
-            <div className="mt-2 text-sm text-text-muted">
+            <div className="mt-2 text-base text-chalk-dim">
               {t('description')}
             </div>
           </div>
@@ -110,43 +110,43 @@ export function PerformancePanel() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="p-6 border-indigo-500/20">
-          <div className="text-sm text-text-muted">{t('total_attempts')}</div>
+        <Card className="border-chalk-blue/20 p-6">
+          <div className="text-base text-chalk-dim">{t('total_attempts')}</div>
           <div className="mt-1 flex items-baseline gap-2">
-            <div className="text-3xl font-semibold text-indigo-400">{data.totalAttempts}</div>
+            <div className="text-3xl font-semibold text-chalk-blue">{data.totalAttempts}</div>
             <Badge variant="info">{t('attempts')}</Badge>
           </div>
-          <div className="mt-2 text-xs text-text-muted">
+          <div className="mt-2 text-sm text-chalk-dim">
             {t('total_attempts_description')}
           </div>
         </Card>
 
-        <Card className="p-6 border-indigo-500/20">
-          <div className="text-sm text-text-muted">{t('average_score')}</div>
+        <Card className="border-chalk-blue/20 p-6">
+          <div className="text-base text-chalk-dim">{t('average_score')}</div>
           <div className="mt-1 flex items-baseline gap-2">
-            <div className="text-3xl font-semibold text-indigo-400">
+            <div className="text-3xl font-semibold text-chalk-blue">
               {data.averageScore !== null ? data.averageScore.toFixed(1) : '—'}
             </div>
             {data.averageScore !== null && (
               <Badge variant="info">/ 10</Badge>
             )}
           </div>
-          <div className="mt-2 text-xs text-text-muted">
+          <div className="mt-2 text-sm text-chalk-dim">
             {t('average_score_description')}
           </div>
         </Card>
 
-        <Card className="p-6 border-indigo-500/20">
-          <div className="text-sm text-text-muted">{t('highest_score')}</div>
+        <Card className="border-chalk-blue/20 p-6">
+          <div className="text-base text-chalk-dim">{t('highest_score')}</div>
           <div className="mt-1 flex items-baseline gap-2">
-            <div className="text-3xl font-semibold text-indigo-400">
+            <div className="text-3xl font-semibold text-chalk-blue">
               {data.highestScore !== null ? data.highestScore.toFixed(1) : '—'}
             </div>
             {data.highestScore !== null && (
               <Badge variant="success">/ 10</Badge>
             )}
           </div>
-          <div className="mt-2 text-xs text-text-muted">
+          <div className="mt-2 text-sm text-chalk-dim">
             {t('highest_score_description')}
           </div>
         </Card>
@@ -155,18 +155,18 @@ export function PerformancePanel() {
       {/* Recent Attempts */}
       {data.recentAttempts.length > 0 && (
         <Card className="p-6">
-          <div className="text-lg font-semibold text-text-heading mb-4">
+          <div className="mb-4 text-lg font-semibold text-chalk">
             {t('recent_attempts', { count: data.recentAttempts.length })}
           </div>
           <div className="space-y-2">
             {data.recentAttempts.map(attempt => (
               <Link key={attempt.id} href={`/attempt/${attempt.id}`}>
-                <div className="flex items-center justify-between gap-4 rounded-md border border-border-subtle bg-bg-section px-4 py-3 transition-colors hover:border-indigo-500/50">
+                <div className="flex items-center justify-between gap-4 rounded-hand border border-chalk-faint bg-white/2 px-4 py-3 transition-colors hover:border-chalk-blue/50">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-text-heading">
+                    <div className="text-base font-medium text-chalk">
                       {attempt.quizTitle}
                     </div>
-                    <div className="mt-1 text-xs text-text-muted">
+                    <div className="mt-1 text-sm text-chalk-dim">
                       {t('submitted_at')}
                       {' '}
                       {formatDate(attempt.submittedAt)}
@@ -177,7 +177,7 @@ export function PerformancePanel() {
                       ? (
                           <Badge
                             variant={attempt.score >= 8 ? 'success' : (attempt.score >= 5 ? 'info' : 'neutral')}
-                            className="text-xs"
+                            className="text-sm"
                           >
                             {attempt.score.toFixed(1)}
                             {' '}
@@ -185,11 +185,11 @@ export function PerformancePanel() {
                           </Badge>
                         )
                       : (
-                          <Badge variant="neutral" className="text-xs">
+                          <Badge variant="neutral" className="text-sm">
                             {t('no_score')}
                           </Badge>
                         )}
-                    <span className="text-xs text-text-muted">→</span>
+                    <span className="text-sm text-chalk-dim">→</span>
                   </div>
                 </div>
               </Link>
@@ -201,18 +201,18 @@ export function PerformancePanel() {
       {/* Empty State */}
       {data.totalAttempts === 0 && (
         <Card className="p-6">
-          <div className="rounded-md border border-dashed border-indigo-500/30 px-4 py-8 text-center">
-            <div className="text-sm text-text-muted">
+          <div className="rounded-hand border border-dashed border-chalk-blue/30 px-4 py-8 text-center">
+            <div className="text-base text-chalk-dim">
               {t('no_attempts')}
             </div>
-            <div className="mt-2 text-xs text-text-muted">
+            <div className="mt-2 text-sm text-chalk-dim">
               {t('join_sessions_hint')}
             </div>
             <div className="mt-4">
               <Link href="/dashboard/sessions">
                 <button
                   type="button"
-                  className="rounded-md bg-indigo-500/20 px-4 py-2 text-sm font-medium text-indigo-400 hover:bg-indigo-500/30 transition-colors"
+                  className="rounded-md bg-chalk-blue/20 px-4 py-2 text-base font-medium text-chalk-blue transition-colors hover:bg-chalk-blue/30"
                 >
                   {t('view_sessions')}
                 </button>

@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/server/authz';
+import { z } from 'zod';
+import { requireClassroomOwnership, requireUser } from '@/server/authz';
+import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+
+const UpdateClassSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+});
 
 export async function GET(_: Request, ctx: { params: Promise<{ classId: string }> }) {
   const { userId } = await requireUser();
@@ -29,7 +35,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ classId: string }
           },
           _count: {
             select: {
-              memberships: true,
+              memberships: { where: { status: 'active' } },
             },
           },
         },
@@ -55,3 +61,57 @@ export async function GET(_: Request, ctx: { params: Promise<{ classId: string }
   });
 }
 
+export async function PATCH(req: Request, ctx: { params: Promise<{ classId: string }> }) {
+  try {
+    const { userId } = await requireUser();
+    const { classId } = await ctx.params;
+    const body = UpdateClassSchema.parse(await req.json());
+    await requireClassroomOwnership(userId, classId);
+
+    const updated = await prisma.classroom.update({
+      where: { id: classId },
+      data: { name: body.name },
+      select: { id: true, name: true, updatedAt: true },
+    });
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    const authzResponse = handleAuthorizationError(error);
+    if (authzResponse) {
+      return authzResponse;
+    }
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: 'INVALID_INPUT', details: error.issues }, { status: 400 });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Xoá lớp: xoá luôn session, bài làm và thành viên của lớp (cascade).
+ * Không cho xoá khi lớp đang có session chạy.
+ */
+export async function DELETE(_: Request, ctx: { params: Promise<{ classId: string }> }) {
+  try {
+    const { userId } = await requireUser();
+    const { classId } = await ctx.params;
+    await requireClassroomOwnership(userId, classId);
+
+    const activeSessions = await prisma.quizSession.count({
+      where: { classroomId: classId, status: 'active' },
+    });
+    if (activeSessions > 0) {
+      return NextResponse.json({ error: 'CLASS_HAS_ACTIVE_SESSION' }, { status: 409 });
+    }
+
+    await prisma.classroom.delete({ where: { id: classId } });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const authzResponse = handleAuthorizationError(error);
+    if (authzResponse) {
+      return authzResponse;
+    }
+    throw error;
+  }
+}

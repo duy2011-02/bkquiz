@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/authz';
+import { nextCheckpointDueAt } from '@/server/checkpointPolicy';
 import { prisma } from '@/server/prisma';
 import { buildSessionSnapshotIfNeeded } from '@/server/quizSnapshot';
-
-function randomInt(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
 
 function hashToUint32(input: string) {
   let h = 0x811C9DC5;
@@ -67,7 +64,7 @@ export async function POST(_: Request, ctx: { params: Promise<{ sessionId: strin
   }
 
   const now = new Date();
-  const nextDueAt = new Date(now.getTime() + randomInt(240, 300) * 1000);
+  const nextDueAt = nextCheckpointDueAt(now);
 
   const attempt = await prisma.attempt.upsert({
     where: { sessionId_userId: { sessionId, userId } },

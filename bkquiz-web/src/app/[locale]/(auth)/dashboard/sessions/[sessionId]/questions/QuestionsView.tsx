@@ -1,12 +1,15 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import s from '@/components/chalk/chalk.module.css';
 import { MathRenderer } from '@/components/MathRenderer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { cn } from '@/utils/cn';
 
 type Question = {
   id: string;
@@ -44,6 +47,8 @@ type QuestionsResponse = {
 };
 
 export function QuestionsView(props: { sessionId: string; userId: string | null }) {
+  const t = useTranslations('SessionQuestions');
+  const tSessions = useTranslations('Sessions');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,9 +124,9 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
 
   if (loading) {
     return (
-      <div className="space-y-7 animate-fadeIn">
-        <nav className="text-sm animate-slideUp">
-          <div className="flex items-center gap-2 text-text-muted">
+      <div className="space-y-7">
+        <nav className="text-base">
+          <div className="flex items-center gap-2 text-chalk-dim">
             <Skeleton className="h-4 w-20" />
             <span>·</span>
             <Skeleton className="h-4 w-24" />
@@ -129,16 +134,16 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
             <Skeleton className="h-4 w-20" />
           </div>
         </nav>
-        <Card className="p-5 md:p-6 animate-slideUp">
-          <Skeleton className="h-8 w-64 mb-4" />
+        <Card className="p-5 md:p-6">
+          <Skeleton className="mb-4 h-8 w-64" />
           <Skeleton className="h-4 w-96" />
         </Card>
         <div className="space-y-6">
           {[1, 2, 3].map(i => (
             <Card key={i} className="p-5 md:p-6">
-              <Skeleton className="h-6 w-32 mb-4" />
-              <Skeleton className="h-4 w-full mb-2" />
-              <Skeleton className="h-4 w-3/4 mb-4" />
+              <Skeleton className="mb-4 h-6 w-32" />
+              <Skeleton className="mb-2 h-4 w-full" />
+              <Skeleton className="mb-4 h-4 w-3/4" />
               <div className="space-y-2">
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
@@ -153,27 +158,27 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
 
   if (error) {
     return (
-      <div className="space-y-7 animate-fadeIn">
-        <nav className="text-sm animate-slideUp">
-          <div className="flex items-center gap-2 text-text-muted">
-            <Link href="/dashboard" className="hover:text-text-heading transition-colors">
-              Dashboard
+      <div className="space-y-7">
+        <nav className="text-base">
+          <div className="flex items-center gap-2 text-chalk-dim">
+            <Link href="/dashboard" className="transition-colors hover:text-chalk">
+              {t('breadcrumb_dashboard')}
             </Link>
             <span>·</span>
-            <Link href="/dashboard/sessions" className="hover:text-text-heading transition-colors">
-              Sessions
+            <Link href="/dashboard/sessions" className="transition-colors hover:text-chalk">
+              {t('breadcrumb_sessions')}
             </Link>
             <span>·</span>
-            <span className="text-text-heading">Questions</span>
+            <span className="text-chalk">{t('breadcrumb_questions')}</span>
           </div>
         </nav>
         <Card className="p-5 md:p-6">
-          <div className="rounded-md border border-danger/40 bg-danger/10 p-4 text-center text-danger">
+          <div className="rounded-hand border border-chalk-pink/40 bg-chalk-pink/10 p-4 text-center text-chalk-pink">
             {error === 'SESSION_NOT_FOUND'
-              ? 'Không tìm thấy session'
+              ? t('session_not_found')
               : error === 'FORBIDDEN'
-                ? 'Bạn không có quyền xem questions của session này'
-                : `Lỗi: ${error}`}
+                ? t('forbidden')
+                : t('error', { error })}
           </div>
         </Card>
       </div>
@@ -181,30 +186,30 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
   }
 
   return (
-    <div className="space-y-7 animate-fadeIn">
+    <div className="space-y-7">
       {/* Breadcrumb */}
-      <nav className="text-sm animate-slideUp">
-        <div className="flex items-center gap-2 text-text-muted">
-          <Link href="/dashboard" className="hover:text-text-heading transition-colors">
+      <nav className="text-base">
+        <div className="flex items-center gap-2 text-chalk-dim">
+          <Link href="/dashboard" className="transition-colors hover:text-chalk">
             Dashboard
           </Link>
           <span>·</span>
-          <Link href="/dashboard/sessions" className="hover:text-text-heading transition-colors">
+          <Link href="/dashboard/sessions" className="transition-colors hover:text-chalk">
             Sessions
           </Link>
           <span>·</span>
-          <span className="text-text-heading">Questions</span>
+          <span className="text-chalk">{t('breadcrumb_questions')}</span>
         </div>
       </nav>
 
       {/* Header Card */}
-      <Card className="p-5 md:p-6 animate-slideUp">
+      <Card className="p-5 md:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-semibold text-text-heading">
-              Questions in Session
+            <h1 className="font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
+              {t('title')}
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-text-muted">
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-base text-chalk-dim">
               {session?.quiz?.title && (
                 <>
                   <span>{session.quiz.title}</span>
@@ -218,9 +223,7 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
                 </>
               )}
               <span>
-                {questions.length}
-                {' '}
-                questions
+                {t('questions_count', { count: questions.length })}
               </span>
               {session?.status && (
                 <>
@@ -234,7 +237,7 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
                           : 'info'
                     }
                   >
-                    {session.status}
+                    {tSessions(`badge_${session.status}`)}
                   </Badge>
                 </>
               )}
@@ -242,41 +245,31 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
           </div>
           <div className="flex items-center gap-2">
             {session?.status === 'lobby' && (
-              <Link href={`/dashboard/sessions/${props.sessionId}/teacher`}>
-                <Button variant="primary" size="sm">
-                  Go to Teacher Screen
-                </Button>
-              </Link>
+              <Link href={`/dashboard/sessions/${props.sessionId}/teacher`} className={cn(s.btn, s.btnPrimary, s.btnSm)}>{t('go_to_teacher_screen')}</Link>
             )}
             <Button variant="ghost" size="sm" onClick={() => void loadQuestions()}>
-              Refresh
+              {t('refresh')}
             </Button>
-            <Link href="/dashboard/sessions">
-              <Button variant="ghost" size="sm">
-                ← Quay lại
-              </Button>
-            </Link>
+            <Link href="/dashboard/sessions" className={cn(s.btn, s.btnSm)}>{t('back')}</Link>
           </div>
         </div>
       </Card>
 
       {/* Questions List */}
-      <Card className="p-5 md:p-6 animate-slideUp" style={{ animationDelay: '150ms' }}>
+      <Card className="p-5 md:p-6">
         <div className="mb-4">
-          <h2 className="text-lg font-semibold text-text-heading">
-            Câu hỏi (
-            {questions.length}
-            )
+          <h2 className="text-lg font-semibold text-chalk">
+            {t('questions_heading', { count: questions.length })}
           </h2>
         </div>
 
         <div className="mt-4 space-y-3">
           {questions.length === 0
             ? (
-                <div className="rounded-md border border-dashed border-border-subtle px-4 py-8 text-center text-sm text-text-muted">
+                <div className="rounded-hand border border-dashed border-chalk-faint px-4 py-8 text-center text-base text-chalk-dim">
                   {session?.status === 'lobby'
-                    ? 'Session chưa bắt đầu, đang build questions...'
-                    : 'Chưa có questions'}
+                    ? t('building_questions')
+                    : t('no_questions')}
                 </div>
               )
             : (
@@ -285,22 +278,18 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         {/* Metadata */}
-                        <div className="flex items-center gap-2 text-sm text-text-muted">
+                        <div className="flex items-center gap-2 text-base text-chalk-dim">
                           <span className="font-mono">
-                            Câu
-                            {' '}
-                            {index + 1}
-                            /
-                            {questions.length}
+                            {t('question_number', { current: index + 1, total: questions.length })}
                           </span>
                           <span>·</span>
-                          <Badge variant="neutral" className="text-xs">
-                            {question.type === 'mcq_single' ? 'Chọn 1' : 'Chọn nhiều'}
+                          <Badge variant="neutral" className="text-sm">
+                            {question.type === 'mcq_single' ? t('single_choice') : t('multiple_choice')}
                           </Badge>
                           {question.tag && (
                             <>
                               <span>·</span>
-                              <Badge variant="info" className="text-xs">
+                              <Badge variant="info" className="text-sm">
                                 {question.tag.name}
                               </Badge>
                             </>
@@ -308,8 +297,8 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
                         </div>
 
                         {/* Prompt */}
-                        <div className="mt-2 text-sm text-text-body">
-                          <MathRenderer content={question.prompt} />
+                        <div className="mt-2 text-base text-chalk/85">
+                          <MathRenderer content={question.prompt} className="font-sans" />
                         </div>
 
                         {/* Options */}
@@ -318,16 +307,16 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
                             const optionLabel = String.fromCharCode(65 + optIdx); // A, B, C, D...
                             const isCorrect = option.isCorrect;
                             return (
-                              <div key={`${question.id}-opt-${option.order}`} className="flex items-start gap-2 text-sm">
-                                <div className="w-6 shrink-0 font-mono text-text-muted">
+                              <div key={`${question.id}-opt-${option.order}`} className="flex items-start gap-2 text-base">
+                                <div className="w-6 shrink-0 font-mono text-chalk-dim">
                                   {optionLabel}
                                   .
                                 </div>
-                                <div className={isCorrect ? 'font-medium text-success' : 'text-text-body'}>
-                                  <MathRenderer content={option.content} />
+                                <div className={isCorrect ? 'font-medium text-chalk-green' : 'text-chalk/85'}>
+                                  <MathRenderer content={option.content} className="font-sans" />
                                   {isCorrect && (
-                                    <Badge variant="success" className="ml-2 text-xs">
-                                      Đúng
+                                    <Badge variant="success" className="ml-2 text-sm">
+                                      {t('correct')}
                                     </Badge>
                                   )}
                                 </div>

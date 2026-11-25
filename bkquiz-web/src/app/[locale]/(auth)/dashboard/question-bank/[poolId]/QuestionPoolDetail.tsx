@@ -1,22 +1,26 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import s from '@/components/chalk/chalk.module.css';
 import { MathRenderer } from '@/components/MathRenderer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { Toast } from '@/components/ui/Toast';
 import { TagInput } from '@/components/ui/TagInput';
+import { Toast } from '@/components/ui/Toast';
 import { generateQuestionMarkdown } from '@/server/export/markdownPool';
+import { cn } from '@/utils/cn';
 
 type Pool = {
   id: string;
   name: string;
   visibility: 'private' | 'shared';
   updatedAt: string | Date;
+  ownerTeacherId?: string;
   permission?: 'view' | 'use' | 'edit';
   questionCount?: number;
   tagCount?: number;
@@ -45,6 +49,8 @@ type QuestionOption = {
 export function QuestionPoolDetail(props: { poolId: string; userId: string | null }) {
   const t = useTranslations('QuestionBank.detail');
   const tQB = useTranslations('QuestionBank');
+  const locale = useLocale();
+  const router = useRouter();
   const [pool, setPool] = useState<Pool | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [shares, setShares] = useState<Share[]>([]);
@@ -457,11 +463,32 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
   }
 
   const canEdit = pool?.permission === 'edit';
+  const isPoolOwner = !!pool && !!props.userId && pool.ownerTeacherId === props.userId;
+
+  async function deletePool() {
+    if (!pool || !window.confirm(t('confirm_delete_pool', { name: pool.name, count: pool.questionCount ?? 0 }))) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/pools/${props.poolId}`, { method: 'DELETE' });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? 'DELETE_FAILED');
+        setToast({ message: t('delete_pool_failed'), type: 'error' });
+        return;
+      }
+      router.push('/dashboard/question-bank');
+    } finally {
+      setBusy(false);
+    }
+  }
   const formatDate = (date: string | Date | undefined) => {
     if (!date) {
       return '';
     }
-    return new Date(date).toLocaleDateString('vi-VN', {
+    return new Date(date).toLocaleDateString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -479,16 +506,16 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
       )}
 
       {/* Breadcrumb */}
-      <nav className="text-sm text-text-muted">
-        <Link href="/dashboard" className="hover:text-text-heading transition-colors">
+      <nav className="text-base text-chalk-dim">
+        <Link href="/dashboard" className="transition-colors hover:text-chalk">
           {tQB('breadcrumb_dashboard')}
         </Link>
         <span className="mx-2">·</span>
-        <Link href="/dashboard/question-bank" className="hover:text-text-heading transition-colors">
+        <Link href="/dashboard/question-bank" className="transition-colors hover:text-chalk">
           {tQB('title')}
         </Link>
         <span className="mx-2">·</span>
-        <span className="text-text-heading">{pool?.name || t('loading')}</span>
+        <span className="text-chalk">{pool?.name || t('loading')}</span>
       </nav>
 
       {/* Pool Header */}
@@ -510,7 +537,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                             <select
                               value={editPoolVisibility}
                               onChange={e => setEditPoolVisibility(e.target.value as 'private' | 'shared')}
-                              className="rounded-sm border border-border-subtle bg-bg-section px-3 py-2 text-sm text-text-body"
+                              className={cn(s.field, 'w-auto')}
                               disabled={busy}
                             >
                               <option value="private">{t('private')}</option>
@@ -537,13 +564,27 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                               >
                                 {tQB('cancel')}
                               </Button>
+                              {isPoolOwner && (
+                                <Button
+                                  variant="danger"
+                                  size="sm"
+                                  className="ml-auto"
+                                  onClick={() => void deletePool()}
+                                  disabled={busy}
+                                >
+                                  {t('delete_pool')}
+                                </Button>
+                              )}
                             </div>
+                            {isPoolOwner && (
+                              <div className="text-sm text-chalk-dim">{t('delete_pool_hint')}</div>
+                            )}
                           </div>
                         )
                       : (
                           <>
-                            <h1 className="text-2xl font-semibold text-text-heading">{pool.name}</h1>
-                            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-text-muted">
+                            <h1 className="font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">{pool.name}</h1>
+                            <div className="mt-2 flex flex-wrap items-center gap-3 text-base text-chalk-dim">
                               <Badge variant="neutral">{pool.visibility}</Badge>
                               {pool.permission && (
                                 <Badge variant="info">{pool.permission}</Badge>
@@ -600,11 +641,11 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
               </>
             )
           : (
-              <div className="text-text-muted">{t('loading')}</div>
+              <div className="text-chalk-dim">{t('loading')}</div>
             )}
         {error
           ? (
-              <div className="mt-3 rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="mt-3 rounded-hand border border-chalk-pink/40 bg-chalk-pink/10 p-3 text-base text-chalk-pink">
                 {error}
               </div>
             )
@@ -615,7 +656,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
       {showMarkdownEditor && (
         <Card className="p-5 md:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-text-heading">{t('edit_markdown')}</h2>
+            <h2 className="text-lg font-semibold text-chalk">{t('edit_markdown')}</h2>
             <div className="flex gap-2">
               {canEdit && (
                 <Button
@@ -640,17 +681,17 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
               </Button>
             </div>
           </div>
-          <div className="text-sm text-text-muted mb-2">
+          <div className="mb-2 text-base text-chalk-dim">
             {t('edit_markdown_hint')}
           </div>
           <textarea
             value={markdownContent}
             onChange={e => setMarkdownContent(e.target.value)}
-            className="w-full min-h-[400px] rounded-sm border border-border-subtle bg-bg-section px-3 py-2 font-mono text-sm text-text-body"
+            className={cn(s.field, 'min-h-[400px] font-mono')}
             placeholder={t('markdown_content_placeholder')}
             disabled={markdownBusy}
           />
-          <div className="mt-2 text-xs text-text-muted">
+          <div className="mt-2 text-sm text-chalk-dim">
             {t('markdown_tip')}
           </div>
         </Card>
@@ -660,7 +701,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
       {editingQuestionId && (
         <Card className="mt-4 p-5 md:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-text-heading">{t('edit_question_markdown')}</h2>
+            <h2 className="text-lg font-semibold text-chalk">{t('edit_question_markdown')}</h2>
             <div className="flex gap-2">
               {canEdit && (
                 <Button
@@ -684,13 +725,13 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
               </Button>
             </div>
           </div>
-          <div className="mb-2 text-sm text-text-muted">
+          <div className="mb-2 text-base text-chalk-dim">
             {t('edit_question_hint')}
           </div>
           <textarea
             value={questionMarkdown}
             onChange={e => setQuestionMarkdown(e.target.value)}
-            className="w-full min-h-[300px] rounded-sm border border-border-subtle bg-bg-section px-3 py-2 font-mono text-sm text-text-body"
+            className={cn(s.field, 'min-h-[300px] font-mono')}
             placeholder={t('question_markdown_placeholder')}
           />
         </Card>
@@ -700,10 +741,10 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
       <Card className="p-5 md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-text-heading">
+            <h2 className="text-lg font-semibold text-chalk">
               {t('questions_section', { count: filteredQuestions.length })}
             </h2>
-            <div className="mt-1 text-sm text-text-muted">
+            <div className="mt-1 text-base text-chalk-dim">
               {t('total_questions', { count: questions.length })}
             </div>
           </div>
@@ -730,7 +771,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
             <select
               value={filterTag || ''}
               onChange={e => setFilterTag(e.target.value || null)}
-              className="rounded-sm border border-border-subtle bg-bg-section px-3 py-2 text-sm text-text-body"
+              className={cn(s.field, 'w-auto')}
             >
               <option value="">{t('all_tags')}</option>
               {allTags.map((tagNorm) => {
@@ -747,14 +788,14 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
 
         {/* Add Question Form */}
         {showAddForm && canEdit && (
-          <Card className="mt-4 border-dashed bg-bg-section p-4">
-            <div className="mb-4 text-sm font-medium text-text-heading">{t('add_new_question')}</div>
+          <Card className="mt-4 border-dashed bg-white/2 p-4">
+            <div className="mb-4 text-base font-medium text-chalk">{t('add_new_question')}</div>
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium text-text-heading">{t('type')}</span>
+                <label className="grid gap-1 text-base">
+                  <span className="font-medium text-chalk">{t('type')}</span>
                   <select
-                    className="rounded-sm border border-border-subtle bg-bg-section px-3 py-2 text-sm text-text-body"
+                    className={cn(s.field, 'w-auto')}
                     value={qType}
                     onChange={e => setQType(e.target.value as 'mcq_single' | 'mcq_multi')}
                     disabled={busy}
@@ -763,8 +804,8 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                     <option value="mcq_multi">mcq_multi</option>
                   </select>
                 </label>
-                <div className="grid gap-1 text-sm">
-                  <label htmlFor="q-tags" className="font-medium text-text-heading">{t('tags_comma_separated')}</label>
+                <div className="grid gap-1 text-base">
+                  <label htmlFor="q-tags" className="font-medium text-chalk">{t('tags_comma_separated')}</label>
                   <Input
                     id="q-tags"
                     value={qTags}
@@ -775,10 +816,10 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                 </div>
               </div>
 
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-text-heading">{t('prompt')}</span>
+              <label className="grid gap-1 text-base">
+                <span className="font-medium text-chalk">{t('prompt')}</span>
                 <textarea
-                  className="min-h-24 rounded-sm border border-border-subtle bg-bg-section px-3 py-2 text-sm text-text-body"
+                  className={cn(s.field, 'min-h-24')}
                   value={qPrompt}
                   onChange={e => setQPrompt(e.target.value)}
                   disabled={busy}
@@ -788,7 +829,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-text-heading">{t('options')}</span>
+                  <span className="text-base font-medium text-chalk">{t('options')}</span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -810,19 +851,19 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                         className="flex-1"
                       />
                       {qType === 'mcq_multi' && (
-                        <label className="flex items-center gap-2 text-sm">
+                        <label className="flex items-center gap-2 text-base">
                           <input
                             type="checkbox"
                             checked={opt.isCorrect}
                             onChange={e => updateOption(idx, 'isCorrect', e.target.checked)}
                             disabled={busy}
-                            className="rounded border-border-subtle"
+                            className="h-5 w-5 accent-chalk-yellow"
                           />
-                          <span className="text-text-muted">{t('correct')}</span>
+                          <span className="text-chalk-dim">{t('correct')}</span>
                         </label>
                       )}
                       {qType === 'mcq_single' && (
-                        <label className="flex items-center gap-2 text-sm">
+                        <label className="flex items-center gap-2 text-base">
                           <input
                             type="radio"
                             name="correct-option"
@@ -832,7 +873,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                             }}
                             disabled={busy}
                           />
-                          <span className="text-text-muted">{t('correct')}</span>
+                          <span className="text-chalk-dim">{t('correct')}</span>
                         </label>
                       )}
                       {qOptions.length > 2 && (
@@ -859,25 +900,25 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                 {busy ? t('saving') : t('add_question')}
               </Button>
             </div>
-        </Card>
-      )}
+          </Card>
+        )}
 
-      {/* Pool Tags Section */}
-      {pool && canEdit && (
-        <Card className="p-5 md:p-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-text-heading">
-              {t('pool_tags')}
-            </label>
-            <TagInput
-              value={poolTagsInput}
-              onChange={setPoolTagsInput}
-              onSave={savePoolTags}
-              tags={poolTags}
-              showSaveButton={true}
-              disabled={poolTagsBusy}
-              placeholder={t('pool_tags_placeholder')}
-            />
+        {/* Pool Tags Section */}
+        {pool && canEdit && (
+          <Card className="p-5 md:p-6">
+            <div className="space-y-2">
+              <label className="text-base font-medium text-chalk">
+                {t('pool_tags')}
+              </label>
+              <TagInput
+                value={poolTagsInput}
+                onChange={setPoolTagsInput}
+                onSave={savePoolTags}
+                tags={poolTags}
+                showSaveButton={true}
+                disabled={poolTagsBusy}
+                placeholder={t('pool_tags_placeholder')}
+              />
             </div>
           </Card>
         )}
@@ -886,7 +927,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
         <div className="mt-4 space-y-3">
           {filteredQuestions.length === 0
             ? (
-                <div className="rounded-md border border-dashed border-border-subtle px-4 py-8 text-center text-sm text-text-muted">
+                <div className="rounded-hand border border-dashed border-chalk-faint px-4 py-8 text-center text-base text-chalk-dim">
                   {questions.length === 0
                     ? t('no_questions')
                     : t('no_matching_questions')}
@@ -897,34 +938,34 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                   <Card key={q.id} className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 text-sm text-text-muted">
+                        <div className="flex items-center gap-2 text-base text-chalk-dim">
                           <span className="font-mono">
                             #
                             {filteredQuestions.length - idx}
                           </span>
                           <span>·</span>
-                          <Badge variant="neutral" className="text-xs">
+                          <Badge variant="neutral" className="text-sm">
                             {q.type}
                           </Badge>
                           <span>·</span>
-                          <span className="text-xs">
+                          <span className="text-sm">
                             {formatDate(q.createdAt)}
                           </span>
                         </div>
-                        <div className="mt-2 text-sm text-text-body">
-                          <MathRenderer content={q.prompt} />
+                        <div className="mt-2 text-base text-chalk/85">
+                          <MathRenderer content={q.prompt} className="font-sans" />
                         </div>
                         <div className="mt-3 space-y-1">
                           {q.options.map(o => (
-                            <div key={o.order} className="flex items-start gap-2 text-sm">
-                              <div className="w-6 shrink-0 font-mono text-text-muted">
+                            <div key={o.order} className="flex items-start gap-2 text-base">
+                              <div className="w-6 shrink-0 font-mono text-chalk-dim">
                                 {o.order + 1}
                                 .
                               </div>
-                              <div className={o.isCorrect ? 'font-medium text-success' : 'text-text-body'}>
-                                <MathRenderer content={o.content} />
+                              <div className={o.isCorrect ? 'font-medium text-chalk-green' : 'text-chalk/85'}>
+                                <MathRenderer content={o.content} className="font-sans" />
                                 {o.isCorrect && (
-                                  <Badge variant="success" className="ml-2 text-xs">
+                                  <Badge variant="success" className="ml-2 text-sm">
                                     {t('correct')}
                                   </Badge>
                                 )}
@@ -938,7 +979,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                               <Badge
                                 key={t.normalizedName}
                                 variant="info"
-                                className="text-xs cursor-pointer"
+                                className="cursor-pointer text-sm"
                                 onClick={() => setFilterTag(t.normalizedName)}
                               >
                                 {t.name}
@@ -977,7 +1018,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
       {/* Share Section */}
       {canEdit && (
         <Card className="p-5 md:p-6">
-          <h2 className="text-lg font-semibold text-text-heading">{t('share_pool_section')}</h2>
+          <h2 className="text-lg font-semibold text-chalk">{t('share_pool_section')}</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Input
               value={shareEmail}
@@ -988,7 +1029,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
             <select
               value={sharePerm}
               onChange={e => setSharePerm(e.target.value as 'view' | 'use' | 'edit')}
-              className="rounded-sm border border-border-subtle bg-bg-section px-3 py-2 text-sm text-text-body"
+              className={cn(s.field, 'w-auto')}
               disabled={busy}
             >
               <option value="view">view</option>
@@ -1009,19 +1050,19 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
 
           {shares.length > 0 && (
             <div className="mt-5">
-              <div className="mb-3 text-sm font-medium text-text-heading">{t('share_list')}</div>
+              <div className="mb-3 text-base font-medium text-chalk">{t('share_list')}</div>
               <div className="space-y-2">
                 {shares.map(s => (
                   <div
                     key={s.sharedWith.id}
-                    className="flex items-center justify-between rounded-md border border-border-subtle bg-bg-section px-4 py-3"
+                    className="flex items-center justify-between rounded-hand border border-chalk-faint bg-white/2 px-4 py-3"
                   >
                     <div>
-                      <div className="text-sm font-medium text-text-heading">
+                      <div className="text-base font-medium text-chalk">
                         {s.sharedWith.name || s.sharedWith.email || t('no_name')}
                       </div>
-                      <div className="mt-1 text-xs text-text-muted">
-                        <Badge variant="neutral" className="text-xs">
+                      <div className="mt-1 text-sm text-chalk-dim">
+                        <Badge variant="neutral" className="text-sm">
                           {s.permission}
                         </Badge>
                         <span className="ml-2">

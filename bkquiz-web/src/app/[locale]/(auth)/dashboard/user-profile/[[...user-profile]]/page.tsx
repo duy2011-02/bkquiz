@@ -23,6 +23,7 @@ export async function generateMetadata(props: IUserProfilePageProps): Promise<Me
 export default async function UserProfilePage(props: IUserProfilePageProps) {
   const { locale } = await props.params;
   setRequestLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'UserProfile' });
   const { userId } = await requireUser();
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -31,11 +32,11 @@ export default async function UserProfilePage(props: IUserProfilePageProps) {
 
   return (
     <div className="py-5">
-      <h2 className="text-xl font-semibold text-text-heading">Hồ sơ</h2>
+      <h2 className="text-xl font-semibold text-chalk">{t('title')}</h2>
       <Card className="mt-4 p-4">
-        <div className="text-sm text-text-muted">Email</div>
+        <div className="text-base text-chalk-dim">{t('email')}</div>
         <div className="font-medium">{user?.email ?? '-'}</div>
-        <div className="mt-3 text-sm text-text-muted">Tên</div>
+        <div className="mt-3 text-base text-chalk-dim">{t('name')}</div>
         <div className="font-medium">{user?.name ?? '-'}</div>
       </Card>
     </div>

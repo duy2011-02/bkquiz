@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { calculateSessionEndTime } from '@/server/attemptTimeLimit';
 import { prisma } from '@/server/prisma';
 import { buildSessionSnapshotIfNeeded } from '@/server/quizSnapshot';
 
@@ -103,12 +104,10 @@ export async function POST(req: Request) {
           continue;
         }
 
-        const settings = session.settings as { durationSeconds?: number; bufferMinutes?: number } | null;
-        const durationSeconds = settings?.durationSeconds;
-        const bufferMinutes = settings?.bufferMinutes ?? 5; // Default 5 minutes
+        // Đã tính cả thời gian giáo viên gia hạn (extensionSeconds)
+        const endTime = calculateSessionEndTime(session.startedAt, session.settings);
 
-        if (durationSeconds) {
-          const endTime = new Date(session.startedAt.getTime() + durationSeconds * 1000 + bufferMinutes * 60 * 1000);
+        if (endTime) {
           if (endTime <= now) {
             // Auto-end the session
             await prisma.quizSession.update({

@@ -1,10 +1,11 @@
 'use client';
 
-import { Input } from '@/components/ui/Input';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { FieldHint, Input } from '@/components/ui/Input';
 
-interface TagInputProps {
+type TagInputProps = {
   value: string; // Comma-separated string
   onChange: (value: string) => void;
   onSave?: () => void;
@@ -13,7 +14,7 @@ interface TagInputProps {
   maxLength?: number;
   disabled?: boolean;
   showSaveButton?: boolean;
-}
+};
 
 export function TagInput({
   value,
@@ -25,6 +26,7 @@ export function TagInput({
   disabled = false,
   showSaveButton = false,
 }: TagInputProps) {
+  const t = useTranslations('TagInput');
   return (
     <div className="space-y-2">
       <Input
@@ -39,20 +41,20 @@ export function TagInput({
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {tags.map(tag => (
-            <Badge key={tag.id} variant="neutral" className="text-xs">
+            <Badge key={tag.id} variant="neutral">
               {tag.name}
             </Badge>
           ))}
         </div>
       )}
 
-      <p className="text-xs text-text-muted">
-        Tối đa 5 tags. Ví dụ: 2025, IT, HCM
-      </p>
+      <FieldHint>
+        {t('hint')}
+      </FieldHint>
 
       {showSaveButton && onSave && (
         <Button variant="primary" size="sm" onClick={onSave} disabled={disabled}>
-          Lưu tags
+          {t('save')}
         </Button>
       )}
     </div>

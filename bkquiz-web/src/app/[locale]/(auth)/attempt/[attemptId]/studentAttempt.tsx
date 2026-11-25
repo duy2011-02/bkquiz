@@ -1,14 +1,19 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+import shared from '@/components/chalk/chalk.module.css';
+import { ChalkRoom } from '@/components/chalk/ChalkRoom';
 import { MathRenderer } from '@/components/MathRenderer';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { cn } from '@/utils/cn';
+import { getI18nPath } from '@/utils/Helpers';
 import { idbGet, idbSet } from '@/utils/idb';
+import local from './chalkboard.module.css';
+
+// Shared chalkboard system + the parts only this page uses (question, options, navigator)
+const styles = { ...shared, ...local };
 
 type AttemptState = {
   id: string;
@@ -87,6 +92,7 @@ async function writeLocalAnswers(attemptId: string, store: LocalAnswerStore) {
 
 export function AttemptClient(props: { attemptId: string }) {
   const t = useTranslations('Attempt');
+  const locale = useLocale();
   const [state, setState] = useState<AttemptState | null>(null);
   const [questions, setQuestions] = useState<SnapshotQuestion[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -276,8 +282,13 @@ export function AttemptClient(props: { attemptId: string }) {
       };
       localAnswersRef.current = { ...store };
       await writeLocalAnswers(props.attemptId, store);
-      setSubmittedQuestions(new Set([...submittedQuestions, current.id]));
+      setSubmittedQuestions(prev => new Set([...prev, current.id]));
       setPendingCount(computePending(store));
+      // Move on to the next question (stay on the last one)
+      const currentIdx = questions.findIndex(x => x.id === current.id);
+      if (currentIdx >= 0 && currentIdx < questions.length - 1) {
+        setIdx(currentIdx + 1);
+      }
     } finally {
       setBusy(false);
     }
@@ -305,10 +316,10 @@ export function AttemptClient(props: { attemptId: string }) {
         setError(json.error ?? t('submit_failed'));
         return;
       }
-      setError(t('submit_success', { 
-        score: json.score ?? 0, 
-        correctCount: json.correctCount ?? 0, 
-        totalQuestions: json.totalQuestions ?? 0 
+      setError(t('submit_success', {
+        score: json.score ?? 0,
+        correctCount: json.correctCount ?? 0,
+        totalQuestions: json.totalQuestions ?? 0,
       }));
       await load();
     } finally {
@@ -572,14 +583,6 @@ export function AttemptClient(props: { attemptId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, questions.length]);
 
-  const nextDueIn = useMemo(() => {
-    if (!state?.nextDueAt) {
-      return null;
-    }
-    const ms = new Date(state.nextDueAt).getTime() - Date.now();
-    return Math.max(0, Math.ceil(ms / 1000));
-  }, [state?.nextDueAt]);
-
   async function verify() {
     setBusy(true);
     setError(null);
@@ -612,20 +615,30 @@ export function AttemptClient(props: { attemptId: string }) {
     }
   }
 
+  const exitButton = (
+    <Link href={getI18nPath('/dashboard', locale)} className={cn(styles.btn, styles.ledgeBtn)}>
+      ←
+      {' '}
+      {t('back_to_dashboard')}
+    </Link>
+  );
+
   if (error) {
     return (
-      <Card>
-        <div className="text-lg font-semibold text-text-heading">Có lỗi</div>
-        <div className="mt-2 text-sm text-danger">{error}</div>
-      </Card>
+      <ChalkRoom lockViewport ledge={exitButton}>
+        <div className={styles.questionArea}>
+          <h1 className={cn(styles.title, styles.script, styles.chalk)}>{t('error_title')}</h1>
+          <div className={cn(styles.note, styles.pink)}>{error}</div>
+        </div>
+      </ChalkRoom>
     );
   }
 
   if (!state) {
     return (
-      <Card className="p-6">
-        <div className="text-lg font-semibold">Đang tải...</div>
-      </Card>
+      <ChalkRoom lockViewport>
+        <div className={cn(styles.title, styles.script, styles.chalk)}>{t('loading')}</div>
+      </ChalkRoom>
     );
   }
 
@@ -634,121 +647,296 @@ export function AttemptClient(props: { attemptId: string }) {
   const isDisabled = isTimeUp || state.status === 'submitted' || !state.attemptStartedAt;
   const q = questions[idx] ?? null;
   const progressPct = questions.length > 0 ? Math.round(((idx + 1) / questions.length) * 100) : 0;
+  const showQuestion = q !== null && (state.attemptStartedAt || state.status === 'submitted');
+  const isWaitingInLobby = !state.attemptStartedAt && state.status === 'active' && state.session.status === 'lobby' && questions.length > 0;
 
   const getQuestionStatus = (questionId: string, questionIdx: number) => {
     if (questionIdx === idx) {
       return 'current';
     }
-    const answer = localAnswersRef.current[questionId];
-    if (answer && answer.selected.length > 0) {
-      return 'answered';
-    }
-    return 'unanswered';
+    return submittedQuestions.has(questionId) ? 'submitted' : 'not_submitted';
   };
 
+  const ledge = state.status === 'submitted' || canReview
+    ? exitButton
+    : (
+        <button
+          type="button"
+          className={cn(styles.btn, styles.ledgeBtn)}
+          disabled={busy || blocked || state.status !== 'active' || !isOnline || pendingCount > 0 || isDisabled}
+          onClick={() => setShowSubmitConfirm(true)}
+        >
+          {t('submit_quiz')}
+        </button>
+      );
+
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Compact Sticky Status Bar - Neo lên top đầu */}
-      <div className="sticky top-0 z-50 -mx-4 border-b border-border-subtle bg-bg-page/95 px-3 py-2 backdrop-blur sm:px-4 sm:py-2.5">
-        {/* Row 1: Quiz title (compact) */}
-        <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-2">
+    <>
+      <ChalkRoom lockViewport ledge={ledge}>
+        {/* Header: title, status, timer */}
+        <header className={styles.header}>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-text-heading sm:text-base">{state.session.sessionName || state.session.quiz.title}</div>
-            <div className="mt-1 flex items-center gap-2 text-[10px] text-text-muted sm:text-xs">
+            <h1 className={cn(styles.title, styles.script, styles.chalk)}>
+              {state.session.sessionName || state.session.quiz.title}
+            </h1>
+            <div className={cn(styles.meta, styles.dim, 'mt-1')}>
               <span>
-                Câu
+                {t('answered_label')}
+                :
                 {' '}
-                <span className="font-mono font-semibold">{questions.length === 0 ? '-' : (idx + 1)}</span>
+                <span className={styles.chalk}>{answeredCount}</span>
                 /
-                <span className="font-mono">{questions.length || '-'}</span>
+                {questions.length || '-'}
               </span>
-              <span>·</span>
-              <span>
-                {t('answered_label')}:
-                {' '}
-                <span className="font-mono font-semibold text-text-heading">{answeredCount}</span>
-                /
-                <span className="font-mono">{questions.length || '-'}</span>
+              <span className={cn(styles.tag, isOnline ? styles.green : styles.pink)}>
+                {isOnline ? t('status_online') : t('status_offline')}
               </span>
-              {timeRemaining !== null && (
-                <>
-                  <span>·</span>
-                  <span>
-                    {t('time_remaining')}
-                    {' '}
-                    <span className={cn(
-                      'font-mono font-semibold',
-                      timeRemaining < 60 ? 'text-danger' : timeRemaining < 300 ? 'text-warning' : 'text-text-heading',
-                    )}
-                    >
-                      {timeRemaining < 60
-                        ? `${timeRemaining}s`
-                        : `${Math.floor(timeRemaining / 60)}:${String(timeRemaining % 60).padStart(2, '0')}`}
-                    </span>
-                  </span>
-                </>
+              {pendingCount > 0 && (
+                <span className={cn(styles.tag, styles.yellow)} title={t('pending_sync_title')}>
+                  ⟳
+                  {' '}
+                  {pendingCount}
+                </span>
               )}
-              {nextDueIn !== null && (
-                <>
-                  <span>·</span>
-                  <span>
-                    <span className={cn(
-                      'font-mono font-semibold',
-                      nextDueIn <= 10 ? 'text-danger' : nextDueIn <= 30 ? 'text-warning' : 'text-text-heading',
-                    )}
-                    >
-                      {nextDueIn}
-                    </span>
-                    s
-                  </span>
-                </>
-              )}
+              {state.warning && !blocked && <span className={cn(styles.tag, styles.yellow)}>⚠️</span>}
+              {blocked && <span className={cn(styles.tag, styles.pink)}>🔒</span>}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Badge variant={isOnline ? 'success' : 'danger'} className="text-[9px] sm:text-[10px]">{isOnline ? 'Online' : 'Offline'}</Badge>
-            {pendingCount > 0 && (
-              <Badge variant="warning" className="text-[9px] sm:text-[10px]">
-                <span className="font-mono">{pendingCount}</span>
-              </Badge>
-            )}
-            {state.warning && !blocked && <Badge variant="warning" className="text-[9px] sm:text-[10px]">⚠️</Badge>}
-            {blocked && <Badge variant="danger" className="text-[9px] sm:text-[10px]">🔒</Badge>}
-          </div>
-        </div>
-
-        {/* Row 2: Progress bar (compact) */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-section sm:h-2">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-300"
-                style={{ width: `${progressPct}%` }}
-              />
+          {timeRemaining !== null && (
+            <div
+              className={cn(
+                styles.timer,
+                styles.chalk,
+                timeRemaining < 60 ? styles.pink : timeRemaining < 300 ? styles.yellow : null,
+              )}
+              aria-label={`${t('time_remaining')} ${timeRemaining}s`}
+            >
+              {formatTime(timeRemaining)}
             </div>
-          </div>
-          <span className="text-[10px] font-mono font-semibold text-text-heading sm:text-xs">
-            {progressPct}
-            %
-          </span>
+          )}
+        </header>
+
+        <div className={styles.progressTrack} aria-label={`${progressPct}%`}>
+          <div className={styles.progressFill} style={{ width: `${progressPct}%` }} />
         </div>
 
-        {/* Error/Sync status (compact, chỉ hiện khi có) */}
         {syncError && (
-          <div className="mt-1 text-[9px] text-danger sm:text-[10px]">
+          <div className={styles.pink}>
             {t('sync_error')}
             {' '}
-            <span className="font-mono">{syncError}</span>
+            {syncError}
           </div>
         )}
-      </div>
 
-      {/* Question Navigation Grid */}
-      {questions.length > 0
-        ? (
-            <Card className="p-3 sm:p-4">
-              <div className="mb-2 text-xs font-semibold text-text-heading sm:mb-3 sm:text-sm">{t('question_list')}</div>
-              <div className="grid grid-cols-8 gap-1.5 sm:grid-cols-10 sm:gap-2 md:grid-cols-12 lg:grid-cols-15 xl:grid-cols-20">
+        <div className={styles.main}>
+          <section className={styles.questionArea}>
+            {/* Lobby: waiting for teacher */}
+            {isWaitingInLobby && (
+              <div className={cn(styles.note, styles.yellow)}>
+                <div className={cn(styles.script)} style={{ fontSize: '1.8rem' }}>{t('waiting_for_teacher')}</div>
+                <div className={cn(styles.dim, 'mt-1')}>{t('can_review_questions_hint')}</div>
+              </div>
+            )}
+
+            {/* Score after submit */}
+            {state.status === 'submitted' && state.score !== null && state.score !== undefined && (
+              <div className={cn(styles.plainNote, canReview ? styles.green : styles.yellow, 'flex flex-wrap items-baseline gap-x-4 gap-y-1')}>
+                <span className={cn(styles.scoreBig, styles.script)}>
+                  {state.score.toFixed(1)}
+                  {' / '}
+                  {questions.length}
+                </span>
+                <span className={styles.chalk}>{canReview ? t('completed') : t('your_score')}</span>
+              </div>
+            )}
+
+            {/* Submitted but cannot review yet */}
+            {state.status === 'submitted' && !canReview && (
+              <div className={cn(styles.plainNote, styles.yellow)}>
+                <div>{t('cannot_review_yet')}</div>
+                <div className={cn(styles.dim, 'mt-1')}>
+                  {state.session.status !== 'ended' && t('session_not_ended')}
+                  {state.session.status === 'ended' && reviewWindowEnd && (() => {
+                    const now = new Date();
+                    const windowEnd = new Date(reviewWindowEnd);
+                    if (now > windowEnd) {
+                      return t('review_window_closed');
+                    }
+                    const diffMins = Math.ceil((windowEnd.getTime() - now.getTime()) / 60000);
+                    return t('review_window_countdown', { minutes: diffMins });
+                  })()}
+                  {state.session.status === 'ended' && !reviewWindowEnd && t('review_not_allowed')}
+                </div>
+              </div>
+            )}
+
+            {/* Time up */}
+            {isTimeUp && state.status === 'active' && !canReview && (
+              <div className={cn(styles.note, styles.pink)}>{t('time_up_auto_submit')}</div>
+            )}
+
+            {showQuestion && q
+              ? (
+                  <>
+                    <div key={q.id} className={styles.questionEnter}>
+                      <div className={styles.questionLabel}>
+                        <span className={cn(styles.questionNumber, styles.script, styles.chalk)}>
+                          {t('question')}
+                          {' '}
+                          {idx + 1}
+                          <span className={styles.dim}>
+                            /
+                            {questions.length}
+                          </span>
+                        </span>
+                        <span className={cn(styles.tag, styles.blue)}>
+                          {q.type === 'mcq_single' ? t('select_one') : t('select_multiple')}
+                        </span>
+                        {submittedQuestions.has(q.id)
+                          ? <span className={cn(styles.tag, styles.green)}>{t('submitted')}</span>
+                          : !canReview && <span className={cn(styles.tag, styles.dim)}>{t('not_submitted')}</span>}
+                        {canReview && q.questionScore !== null && q.questionScore !== undefined && (
+                          <span className={styles.yellow}>
+                            {t('score')}
+                            {' '}
+                            {q.questionScore.toFixed(2)}
+                            {' / 1.00'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className={cn(styles.prompt, styles.script, styles.chalk)}>
+                        <MathRenderer content={q.prompt} />
+                      </div>
+
+                      <div className={styles.options}>
+                        {q.options.map((o) => {
+                          const optionLabel = String.fromCharCode(65 + o.order); // A, B, C, D...
+                          const isSelected = canReview
+                            ? (q.studentSelected?.includes(o.order) ?? false)
+                            : selected.includes(o.order);
+                          const isCorrect = canReview ? (o.isCorrect ?? false) : false;
+                          const isCorrectAnswer = canReview && isSelected && isCorrect;
+                          const isWrongAnswer = canReview && isSelected && !isCorrect;
+                          const isCorrectButNotSelected = canReview && isCorrect && !isSelected;
+
+                          return (
+                            <label
+                              key={o.order}
+                              aria-label={`option:${o.order}`}
+                              className={cn(
+                                styles.option,
+                                (canReview || isDisabled) && styles.optionDisabled,
+                                !canReview && isSelected && styles.optionSelected,
+                                isCorrectAnswer && styles.optionCorrect,
+                                isWrongAnswer && styles.optionWrong,
+                                isCorrectButNotSelected && styles.optionMissed,
+                              )}
+                            >
+                              {!canReview && (
+                                <input
+                                  type="checkbox"
+                                  className={styles.hiddenInput}
+                                  checked={isSelected}
+                                  disabled={isDisabled}
+                                  onChange={(e) => {
+                                    if (isDisabled) {
+                                      return;
+                                    }
+                                    if (q.type === 'mcq_single') {
+                                      setSelected(e.target.checked ? [o.order] : []);
+                                      return;
+                                    }
+                                    setSelected((prev) => {
+                                      if (e.target.checked) {
+                                        return [...prev, o.order];
+                                      }
+                                      return prev.filter(x => x !== o.order);
+                                    });
+                                  }}
+                                />
+                              )}
+                              <span
+                                className={cn(
+                                  styles.letter,
+                                  styles.chalk,
+                                  isSelected && styles.letterCircled,
+                                  !canReview && isSelected && styles.yellow,
+                                  isCorrectAnswer && styles.green,
+                                  isWrongAnswer && styles.pink,
+                                  isCorrectButNotSelected && styles.green,
+                                )}
+                              >
+                                {optionLabel}
+                              </span>
+                              <span
+                                className={cn(
+                                  styles.optionContent,
+                                  styles.script,
+                                  styles.chalk,
+                                  isWrongAnswer && styles.wrongText,
+                                )}
+                              >
+                                <MathRenderer content={o.content} />
+                              </span>
+                              {(isCorrectAnswer || isCorrectButNotSelected) && (
+                                <span className={cn(styles.mark, styles.green)} title={t('correct')}>✓</span>
+                              )}
+                              {isWrongAnswer && <span className={cn(styles.mark, styles.pink)}>✗</span>}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className={styles.actions}>
+                      <div className={styles.actionsGroup}>
+                        <button
+                          type="button"
+                          className={styles.btn}
+                          onClick={() => setIdx(i => Math.max(0, i - 1))}
+                          disabled={idx === 0}
+                        >
+                          ←
+                          {' '}
+                          {t('previous')}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.btn}
+                          onClick={() => setIdx(i => Math.min(questions.length - 1, i + 1))}
+                          disabled={idx >= questions.length - 1}
+                        >
+                          {t('next')}
+                          {' '}
+                          →
+                        </button>
+                      </div>
+                      {!canReview && (
+                        <button
+                          type="button"
+                          className={cn(styles.btn, styles.btnPrimary)}
+                          onClick={() => void submitQuestion(q.id)}
+                          disabled={busy || !isOnline || state.status !== 'active' || selected.length === 0 || isDisabled}
+                        >
+                          {t('submit_this_question')}
+                        </button>
+                      )}
+                      {canReview && <span className={styles.dim}>{t('review_mode')}</span>}
+                    </div>
+                  </>
+                )
+              : !isWaitingInLobby && (
+                  <div className={cn(styles.note, styles.dim)}>{t('no_questions_in_session')}</div>
+                )}
+          </section>
+
+          {/* Question list written on the side of the board */}
+          {questions.length > 0 && (
+            <aside className={styles.side}>
+              <div className={cn(styles.sideTitle, styles.chalk)}>{t('question_list')}</div>
+              <div className={styles.rule} />
+              <div className={styles.navGrid}>
                 {questions.map((question, i) => {
                   const status = getQuestionStatus(question.id, i);
                   return (
@@ -757,15 +945,14 @@ export function AttemptClient(props: { attemptId: string }) {
                       type="button"
                       onClick={() => setIdx(i)}
                       className={cn(
-                        'aspect-square rounded-md border-2 p-1 text-[10px] font-mono transition-all duration-fast sm:p-2 sm:text-xs',
-                        'active:scale-95 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 sm:focus:ring-offset-2',
-                        status === 'current' && 'border-primary bg-primary/20 shadow-md',
-                        status === 'answered' && 'border-success/50 bg-success/10',
-                        status === 'unanswered' && 'border-border-subtle bg-bg-section hover:bg-bg-elevated',
+                        styles.navItem,
+                        status === 'submitted' && styles.navAnswered,
+                        status === 'current' && styles.navCurrent,
                       )}
-                      aria-label={t('question_status_aria', { 
-                        number: i + 1, 
-                        status: status === 'answered' ? t('answered_label') : status === 'current' ? t('current_question') : t('not_answered_label')
+                      aria-current={status === 'current' ? 'true' : undefined}
+                      aria-label={t('question_status_aria', {
+                        number: i + 1,
+                        status: status === 'submitted' ? t('submitted_label') : status === 'current' ? t('current_question') : t('not_submitted'),
                       })}
                     >
                       {i + 1}
@@ -773,430 +960,132 @@ export function AttemptClient(props: { attemptId: string }) {
                   );
                 })}
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-text-muted sm:mt-3 sm:gap-4 sm:text-xs">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="h-3 w-3 rounded border-2 border-primary bg-primary/20 sm:h-4 sm:w-4" />
-                  <span>{t('current_question')}</span>
-                </div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="h-3 w-3 rounded border-2 border-success/50 bg-success/10 sm:h-4 sm:w-4" />
-                  <span>{t('answered_label')}</span>
-                </div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="h-3 w-3 rounded border-2 border-border-subtle bg-bg-section sm:h-4 sm:w-4" />
-                  <span>{t('not_answered_label')}</span>
-                </div>
+              <div className={cn(styles.legend, styles.dim)}>
+                <span className={styles.yellow}>
+                  <span className={cn(styles.legendSwatch, styles.legendCurrent)} aria-hidden="true">1</span>
+                  {t('current_question')}
+                </span>
+                <span className={styles.green}>
+                  <span className={cn(styles.legendSwatch, styles.legendSubmitted)} aria-hidden="true">2</span>
+                  {t('submitted_label')}
+                </span>
+                <span>
+                  <span className={styles.legendSwatch} aria-hidden="true">3</span>
+                  {t('not_submitted')}
+                </span>
               </div>
-            </Card>
-          )
-        : null}
-
-      {/* "Bắt đầu làm bài" button chỉ hiển thị nếu session chưa active (lobby) */}
-      {state && !state.attemptStartedAt && state.status === 'active' && state.session.status === 'lobby' && questions.length > 0 && (
-        <Card className="p-6 sm:p-8">
-          <div className="text-center">
-            <div className="mb-4 text-lg font-semibold text-text-heading sm:text-xl">
-              {t('waiting_for_teacher')}
-            </div>
-            <div className="mb-6 text-sm text-text-muted sm:text-base">
-              {t('can_review_questions_hint')}
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Score summary: Always show when submitted (regardless of canReview) */}
-      {state?.status === 'submitted' && state.score !== null && state.score !== undefined && (
-        <Card className={cn(
-          'p-6',
-          canReview ? 'border-success bg-success/10' : 'border-primary bg-primary/10',
-        )}>
-          <div className="text-center">
-            <div className="mb-2 text-4xl font-bold" style={{ color: canReview ? 'var(--success)' : 'var(--primary)' }}>
-              {state.score.toFixed(1)}
-              {' '}
-              /
-              {' '}
-              {questions.length}
-            </div>
-            <div className="text-sm text-text-muted">
-              {canReview ? t('completed') : t('your_score')}
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Waiting state: Submitted but cannot review yet */}
-      {state?.status === 'submitted' && !canReview && (
-        <Card className="border-warning bg-warning/10 p-6">
-          <div className="text-center">
-            <div className="mb-2 text-lg font-semibold text-warning">
-              {t('cannot_review_yet')}
-            </div>
-            <div className="text-sm text-text-muted">
-              {state.session.status !== 'ended' && (
-                <>{t('session_not_ended')}</>
-              )}
-              {state.session.status === 'ended' && reviewWindowEnd && (() => {
-                const now = new Date();
-                const windowEnd = new Date(reviewWindowEnd);
-                if (now > windowEnd) {
-                  // Đã hết cửa sổ xem lại
-                  return (
-                    <>
-                      {t('review_window_closed')}
-                    </>
-                  );
-                }
-                // Còn trong cửa sổ, hiển thị countdown
-                const diffMs = windowEnd.getTime() - now.getTime();
-                const diffMins = Math.ceil(diffMs / 60000);
-                return (
-                  <>
-                    {t('review_window_countdown', { minutes: diffMins })}
-                  </>
-                );
-              })()}
-              {state.session.status === 'ended' && !reviewWindowEnd && (
-                <>{t('review_not_allowed')}</>
-              )}
-            </div>
-          </div>
-        </Card>
-      )}
-
-      <Card className="p-4 sm:p-6">
-        <div className="text-sm text-text-body">
-          {q && (state?.attemptStartedAt || state?.status === 'submitted')
-            ? (
-                <div>
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4">
-                    <div className="text-xs text-text-muted sm:text-sm">
-                      {t('question')}
-                      {' '}
-                      <span className="font-mono">{idx + 1}</span>
-                      /
-                      <span className="font-mono">{questions.length}</span>
-                    </div>
-                    <Badge variant="info" className="text-[10px] sm:text-xs">{q.type === 'mcq_single' ? t('select_one') : t('select_multiple')}</Badge>
-                  </div>
-                  <div className="text-sm text-text-heading sm:text-base">
-                    <MathRenderer content={q.prompt} />
-                  </div>
-                  {canReview && q.questionScore !== null && q.questionScore !== undefined && (
-                    <div className="mt-2 text-xs text-text-muted sm:text-sm">
-                      {t('score')}
-                      {' '}
-                      <span className="font-mono font-semibold">
-                        {q.questionScore.toFixed(2)}
-                      </span>
-                      {' '}
-                      / 1.00
-                    </div>
-                  )}
-                  <div className="mt-3 grid gap-2 sm:mt-4">
-                    {q.options.map((o) => {
-                      const optionLabel = String.fromCharCode(65 + o.order); // A, B, C, D...
-                      const isSelected = canReview
-                        ? (q.studentSelected?.includes(o.order) ?? false)
-                        : selected.includes(o.order);
-                      const isCorrect = canReview ? (o.isCorrect ?? false) : false;
-                      const isCorrectAnswer = canReview && isSelected && isCorrect;
-                      const isWrongAnswer = canReview && isSelected && !isCorrect;
-                      const isCorrectButNotSelected = canReview && isCorrect && !isSelected;
-
-                      return (
-                        <label
-                          key={o.order}
-                          aria-label={`option:${o.order}`}
-                          className={cn(
-                            'relative flex items-start gap-2 rounded-md border-2 p-2.5 transition-all duration-fast ease-soft sm:gap-3 sm:p-3',
-                            canReview
-                              ? 'cursor-default' // Read-only in review mode
-                              : 'cursor-pointer active:scale-[0.98] hover:bg-bg-elevated hover:scale-[1.01]',
-                            canReview && isCorrectAnswer && 'border-success bg-success/10',
-                            canReview && isWrongAnswer && 'border-danger bg-danger/10',
-                            canReview && isCorrectButNotSelected && 'border-success/30 bg-success/5',
-                            !canReview && isSelected && 'border-primary bg-primary/10 shadow-md',
-                            !canReview && !isSelected && 'border-border-subtle bg-bg-section',
-                          )}
-                        >
-                          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                            {!canReview && (
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                disabled={isDisabled}
-                                onChange={(e) => {
-                                  if (isDisabled) {
-                                    return;
-                                  }
-                                  if (q.type === 'mcq_single') {
-                                    setSelected(e.target.checked ? [o.order] : []);
-                                    return;
-                                  }
-                                  setSelected((prev) => {
-                                    if (e.target.checked) {
-                                      return [...prev, o.order];
-                                    }
-                                    return prev.filter(x => x !== o.order);
-                                  });
-                                }}
-                                className="h-4 w-4 shrink-0 sm:h-5 sm:w-5"
-                              />
-                            )}
-                            {canReview && (
-                              <div className={cn(
-                                'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs sm:h-6 sm:w-6',
-                                isCorrectAnswer && 'bg-success text-white',
-                                isWrongAnswer && 'bg-danger text-white',
-                                !isSelected && !isCorrect && 'bg-bg-section',
-                              )}
-                              >
-                                {isCorrectAnswer && '✓'}
-                                {isWrongAnswer && '✗'}
-                              </div>
-                            )}
-                            <div className={cn(
-                              'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 font-semibold text-xs sm:h-8 sm:w-8 sm:text-sm',
-                              canReview && isCorrectAnswer && 'border-success bg-success text-white',
-                              canReview && isWrongAnswer && 'border-danger bg-danger text-white',
-                              !canReview && isSelected && 'border-primary bg-primary text-white',
-                              !canReview && !isSelected && 'border-border-subtle bg-bg-card text-text-muted',
-                            )}
-                            >
-                              {optionLabel}
-                            </div>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm text-text-body sm:text-base">
-                              <MathRenderer content={o.content} />
-                            </div>
-                          </div>
-                          {canReview && isCorrect && (
-                            <div className="absolute right-2 top-2">
-                              <Badge variant="success" className="text-[9px] sm:text-[10px]">
-                                {t('correct')}
-                              </Badge>
-                            </div>
-                          )}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-3 space-y-2 sm:mt-4 sm:space-y-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
-                        {submittedQuestions.has(q.id)
-                          ? (
-                              <Badge variant="success" className="text-[10px] sm:text-xs">
-                                {t('submitted')}
-                              </Badge>
-                            )
-                          : (
-                              <Badge variant="neutral" className="text-[10px] sm:text-xs">
-                                {t('not_submitted')}
-                              </Badge>
-                            )}
-                        <div className="text-[10px] text-text-muted sm:text-xs">
-                          {t('autosave_enabled')}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setIdx(i => Math.max(0, i - 1))}
-                          disabled={idx === 0}
-                          className="flex-1 sm:flex-initial"
-                        >
-                          {t('previous')}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setIdx(i => Math.min(questions.length - 1, i + 1))}
-                          disabled={idx >= questions.length - 1}
-                          className="flex-1 sm:flex-initial"
-                        >
-                          {t('next')}
-                        </Button>
-                      </div>
-                    </div>
-                    {!submittedQuestions.has(q.id) && !canReview && (
-                      <div className="flex items-center justify-end">
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => void submitQuestion(q.id)}
-                          disabled={busy || !isOnline || state?.status !== 'active' || selected.length === 0 || isDisabled}
-                          className="w-full sm:w-auto"
-                        >
-                          {t('submit_this_question')}
-                        </Button>
-                      </div>
-                    )}
-                    {canReview && (
-                      <div className="text-xs text-text-muted sm:text-sm">
-                        {t('review_mode')}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            : (
-                <div className="text-sm text-text-body">
-                  {t('no_questions_in_session')}
-                </div>
-              )}
+            </aside>
+          )}
         </div>
-      </Card>
-
-      {/* Time up warning */}
-      {isTimeUp && state.status === 'active' && !canReview && (
-        <Card className="border-danger bg-danger/10 p-4">
-          <div className="text-center text-sm font-semibold text-danger sm:text-base">
-            {t('time_up_auto_submit')}
-          </div>
-        </Card>
-      )}
-
-      {/* Submit button - only show when not in review mode */}
-      {!canReview && (
-        <Card className="p-4 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-              variant="primary"
-              disabled={busy || blocked || state.status !== 'active' || !isOnline || pendingCount > 0 || isDisabled}
-              onClick={() => setShowSubmitConfirm(true)}
-              className="w-full sm:w-auto"
-            >
-              Submit
-            </Button>
-            <div className="text-[10px] text-text-muted sm:text-xs">
-              {isTimeUp
-                ? t('time_up_message')
-                : t('submit_hint')}
-            </div>
-          </div>
-        </Card>
-      )}
+      </ChalkRoom>
 
       {/* Checkpoint Modal */}
-      {blocked
-        ? (
-            <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm sm:p-6">
-              <Card className="w-full max-w-md p-4 sm:p-6">
-                <div className="mb-3 text-center sm:mb-4">
-                  <div className={cn(
-                    'mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full text-3xl font-mono font-bold sm:mb-4 sm:h-20 sm:w-20 sm:text-4xl',
-                    nextDueIn !== null && nextDueIn <= 10 ? 'bg-danger/20 text-danger' : 'bg-warning/20 text-warning',
-                  )}
-                  >
-                    {nextDueIn !== null ? nextDueIn : '...'}
-                  </div>
-                  <div className="text-lg font-semibold text-text-heading sm:text-xl">{t('checkpoint_enter_token')}</div>
-                  <div className="mt-2 text-xs text-text-muted sm:text-sm">
-                    {!isOnline
-                      ? t('offline_please_online')
-                      : (state.isLocked ? t('locked_due_to_failures') : t('token_due'))}
-                  </div>
-                </div>
-
-                <div className="space-y-3 sm:space-y-4">
-                  <label htmlFor="checkpointToken">
-                    <div className="mb-1 text-xs font-medium text-text-heading sm:text-sm">{t('token')}</div>
-                    <Input
-                      id="checkpointToken"
-                      className="font-mono text-sm sm:text-base"
-                      value={token}
-                      onChange={e => setToken(e.target.value)}
-                      disabled={busy || state.inCooldown || !isOnline}
-                      placeholder={t('enter_token_from_teacher_screen')}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !busy && token.trim().length > 0 && !state.inCooldown && isOnline) {
-                          void verify();
-                        }
-                      }}
-                    />
-                  </label>
-
-                  <Button
-                    variant="danger"
-                    className="w-full"
-                    onClick={() => void verify()}
-                    disabled={busy || token.trim().length === 0 || state.inCooldown || !isOnline}
-                  >
-                    {busy ? t('verifying') : t('verify')}
-                  </Button>
-
-                  <div className="text-center text-[10px] text-text-muted sm:text-xs">
-                    {t('wrong')}
-                    {' '}
-                    <span className="font-mono">{state.failedCount}</span>
-                    {state.inCooldown ? t('cooldown_30s') : null}
-                  </div>
-                </div>
-              </Card>
-            </div>
-          )
-        : null}
+      <Modal
+        open={Boolean(blocked)}
+        dismissible={false}
+        title={t('checkpoint_enter_token')}
+        titleClassName="text-center"
+        icon={(
+          <div className={cn(styles.modalIcon, state.isLocked ? styles.pink : styles.yellow)} aria-hidden="true">
+            🔒
+          </div>
+        )}
+      >
+        <div className={cn(styles.modalText, 'text-center')}>
+          {!isOnline
+            ? t('offline_please_online')
+            : (state.isLocked ? t('locked_due_to_failures') : t('token_due'))}
+        </div>
+        <label htmlFor="checkpointToken" className="block">
+          <span className={styles.inputLabel}>{t('token')}</span>
+          <input
+            id="checkpointToken"
+            className={styles.tokenInput}
+            value={token}
+            onChange={e => setToken(e.target.value.replace(/\s/g, ''))}
+            disabled={busy || state.inCooldown || !isOnline}
+            placeholder="••••••"
+            inputMode="numeric"
+            maxLength={12}
+            autoComplete="one-time-code"
+            data-autofocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !busy && token.trim().length > 0 && !state.inCooldown && isOnline) {
+                void verify();
+              }
+            }}
+          />
+          <span className={cn(styles.inputHint, 'mt-2 block text-center')}>
+            {t('enter_token_from_teacher_screen')}
+          </span>
+        </label>
+        <button
+          type="button"
+          className={cn(styles.btn, styles.solidBtn, 'w-full')}
+          onClick={() => void verify()}
+          disabled={busy || token.trim().length === 0 || state.inCooldown || !isOnline}
+        >
+          {busy ? t('verifying') : t('verify')}
+        </button>
+        {(state.failedCount > 0 || state.inCooldown) && (
+          <div className={cn(styles.pink, 'text-center')}>
+            {t('wrong')}
+            {' '}
+            {state.failedCount}
+            {state.inCooldown ? t('cooldown_30s') : null}
+          </div>
+        )}
+      </Modal>
 
       {/* Submit Confirmation Modal */}
-      {showSubmitConfirm
-        ? (
-            <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm sm:p-6">
-              <Card className="w-full max-w-md p-4 sm:p-6">
-                <div className="mb-3 text-base font-semibold text-text-heading sm:mb-4 sm:text-lg">{t('confirm_submit')}</div>
-                <div className="mb-4 space-y-2 text-xs sm:mb-6 sm:text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-muted">{t('total_questions')}</span>
-                    <span className="font-semibold text-text-heading">{questions.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-muted">{t('answered')}</span>
-                    <span className="font-semibold text-success">{answeredCount}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-muted">{t('not_answered')}</span>
-                    <span className={cn(
-                      'font-semibold',
-                      questions.length - answeredCount > 0 ? 'text-warning' : 'text-text-heading',
-                    )}
-                    >
-                      {questions.length - answeredCount}
-                    </span>
-                  </div>
-                  {questions.length - answeredCount > 0
-                    ? (
-                        <div className="mt-3 rounded-md bg-warning/10 p-2.5 text-[10px] text-warning sm:mt-4 sm:p-3 sm:text-xs">
-                          {t('unanswered_warning', { count: questions.length - answeredCount })}
-                        </div>
-                      )
-                    : null}
-                </div>
-                <div className="flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setShowSubmitConfirm(false)}
-                    className="w-full sm:w-auto"
-                  >
-                    {t('cancel')}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => void submit()}
-                    disabled={busy}
-                    className="w-full sm:w-auto"
-                  >
-                    {busy ? t('submitting') : t('confirm_submit')}
-                  </Button>
-                </div>
-              </Card>
-            </div>
-          )
-        : null}
-    </div>
+      <Modal
+        open={showSubmitConfirm}
+        onClose={() => setShowSubmitConfirm(false)}
+        dismissible={!busy}
+        title={t('confirm_submit')}
+      >
+        <div className={styles.rule} />
+        <div className={styles.row}>
+          <span className={styles.dim}>{t('total_questions')}</span>
+          <span className={styles.chalk}>{questions.length}</span>
+        </div>
+        <div className={styles.row}>
+          <span className={styles.dim}>{t('answered')}</span>
+          <span className={styles.green}>{answeredCount}</span>
+        </div>
+        <div className={styles.row}>
+          <span className={styles.dim}>{t('not_answered')}</span>
+          <span className={questions.length - answeredCount > 0 ? styles.yellow : styles.chalk}>
+            {questions.length - answeredCount}
+          </span>
+        </div>
+        {questions.length - answeredCount > 0 && (
+          <div className={cn(styles.note, styles.yellow)} style={{ fontSize: '1.05rem' }}>
+            {t('unanswered_warning', { count: questions.length - answeredCount })}
+          </div>
+        )}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+          <button type="button" className={styles.btn} onClick={() => setShowSubmitConfirm(false)}>
+            {t('cancel')}
+          </button>
+          <button
+            type="button"
+            className={cn(styles.btn, styles.solidBtn)}
+            onClick={() => void submit()}
+            disabled={busy}
+          >
+            {busy ? t('submitting') : t('submit_quiz')}
+          </button>
+        </div>
+      </Modal>
+    </>
   );
+}
+
+function formatTime(seconds: number) {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 // EOF

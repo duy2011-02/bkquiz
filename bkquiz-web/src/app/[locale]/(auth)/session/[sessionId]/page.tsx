@@ -4,10 +4,7 @@ export default async function SessionLobbyPage(props: {
   params: Promise<{ locale: string; sessionId: string }>;
 }) {
   const { sessionId } = await props.params;
-  return (
-    <div className="mx-auto max-w-3xl py-10">
-      <Lobby sessionId={sessionId} />
-    </div>
-  );
+  // The lobby draws its own full chalkboard (same frame as the attempt page)
+  return <Lobby sessionId={sessionId} />;
 }
 // EOF

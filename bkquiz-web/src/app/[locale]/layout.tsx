@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { hasLocale, NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Dancing_Script, Inter, JetBrains_Mono, Patrick_Hand } from 'next/font/google';
 import { notFound } from 'next/navigation';
 import { PostHogProvider } from '@/components/analytics/PostHogProvider';
 import { routing } from '@/libs/I18nRouting';
@@ -16,6 +16,21 @@ const inter = Inter({
 const mono = JetBrains_Mono({
   subsets: ['latin', 'vietnamese'],
   variable: '--font-mono',
+  display: 'swap',
+});
+
+// Chalk handwriting fonts (both support Vietnamese diacritics)
+const chalkFont = Patrick_Hand({
+  weight: '400',
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-chalk',
+  display: 'swap',
+});
+
+const chalkScript = Dancing_Script({
+  weight: ['500', '600', '700'],
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-chalk-script',
   display: 'swap',
 });
 
@@ -62,10 +77,8 @@ export default async function RootLayout(props: {
   const messages = await getMessages();
 
   return (
-    // eslint-disable-next-line tailwindcss/no-custom-classname
-    <html lang={locale} className={`dark ${inter.variable} ${mono.variable}`}>
-      {/* eslint-disable-next-line tailwindcss/classnames-order */}
-      <body className="min-h-dvh text-text-body antialiased [font-family:var(--font-sans)]">
+    <html lang={locale} className={`${inter.variable} ${mono.variable} ${chalkFont.variable} ${chalkScript.variable}`}>
+      <body className="min-h-dvh font-sans text-chalk antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <PostHogProvider>
             {props.children}

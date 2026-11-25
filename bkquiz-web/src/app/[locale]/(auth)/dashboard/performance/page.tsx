@@ -1,10 +1,15 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { getUserRole, requireUser } from '@/server/authz';
 import { PerformancePanel } from './PerformancePanel';
 
-export async function generateMetadata(): Promise<Metadata> {
-  return { title: 'My Performance' };
+export async function generateMetadata(props: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await props.params;
+  const t = await getTranslations({ locale, namespace: 'Performance' });
+  return { title: t('meta_title') };
 }
 
 export default async function PerformancePage() {

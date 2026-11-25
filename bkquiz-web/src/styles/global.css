@@ -6,97 +6,94 @@
 
 @layer theme {
   :root {
-    /* Fallback tokens cho các class bg-* / text-* đang dùng,
-       phòng trường hợp Tailwind chưa generate util tương ứng. */
-    --bk-bg-page: #101010;
-    --bk-bg-section: #141414;
-    --bk-bg-card: #181818;
-    --bk-bg-card-hover: #202020;
+    /* ===== Chalkboard palette (source: attempt/[attemptId]/chalkboard.module.css) ===== */
+    --chalk: #f4f1ea;
+    /* Raised from 0.62 to 0.72 so secondary text reaches WCAG AA (≈5.1:1 on --board) */
+    --chalk-dim: rgba(244, 241, 234, 0.72);
+    /* Decorative only (rules, borders): ≈2.1:1, never use for text */
+    --chalk-faint: rgba(244, 241, 234, 0.28);
+    --chalk-yellow: #f6e27f;
+    --chalk-pink: #f5a3b5;
+    --chalk-green: #b4f0a8;
+    --chalk-blue: #9fd6f2;
+    --board: #2e4a3d;
+    --board-dark: #223a2f;
+    --wood: #8a5a35;
+    --wood-dark: #5e3b20;
 
-    --bk-text-heading: #f5f6fa;
-    --bk-text-body: #cfd3e1;
-    --bk-text-muted: #9aa1b5;
-    --bk-text-on-primary: #05060e;
-
-    --bk-primary: #ff5a00;
-    --bk-primary-hover: #ff6a1a;
+    /* Named versions of hex values already used in the source module */
+    --wall: #e3d8c4; /* .room */
+    --wall-stripe: #d9cdb8; /* .room */
+    --paper: #fbf8f1; /* .tokenInput */
+    --ink-paper: #1f2a24; /* .tokenInput */
+    --ink-wood: #3a2412; /* .ledgeBtn */
+    --ink-on-yellow: #2a1a0c; /* .solidBtn */
   }
+}
 
-  .bg-bg-page {
-    background-color: var(--bk-bg-page);
-  }
+/* ===== Chalk utilities (values copied from chalkboard.module.css) ===== */
 
-  .bg-bg-section {
-    background-color: var(--bk-bg-section);
-  }
+/* .chalk text-shadow */
+@utility chalk-glow {
+  text-shadow:
+    0 0 1px rgba(255, 255, 255, 0.55),
+    0 0 6px rgba(255, 255, 255, 0.12);
+  letter-spacing: 0.01em;
+}
 
-  .bg-bg-card {
-    background-color: var(--bk-bg-card);
-  }
+/* Hand-drawn radius of .btn / .option */
+@utility rounded-hand {
+  border-radius: 14px 18px 12px 20px / 18px 12px 20px 14px;
+}
 
-  .bg-bg-cardHover {
-    background-color: var(--bk-bg-card-hover);
-  }
+/* .option:nth-child(even) */
+@utility rounded-hand-alt {
+  border-radius: 18px 12px 20px 14px / 12px 20px 14px 18px;
+}
 
-  .bg-primary {
-    background-color: var(--bk-primary);
-  }
+/* .note */
+@utility rounded-note {
+  border-radius: 12px 16px 10px 18px;
+}
 
-  .hover\:bg-primary-hover:hover {
-    background-color: var(--bk-primary-hover);
-  }
+/* .letterCircled / .navCurrent */
+@utility rounded-circled {
+  border-radius: 52% 48% 55% 45% / 45% 55% 48% 52%;
+}
 
-  .bg-accent-orange {
-    background-color: var(--bk-accent-orange);
-  }
-
-  .hover\:bg-accent-orangeHover:hover {
-    background-color: var(--bk-accent-orange-hover);
-  }
-
-  .text-text-heading {
-    color: var(--bk-text-heading);
-  }
-
-  .text-text-base,
-  .text-text-body {
-    color: var(--bk-text-body);
-  }
-
-  .text-text-muted {
-    color: var(--bk-text-muted);
-  }
-
-   .text-text-onPrimary {
-     color: var(--bk-text-on-primary);
-   }
+/* .rule: chalk-drawn horizontal line */
+@utility chalk-rule {
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, var(--chalk-faint) 4%, var(--chalk-faint) 96%, transparent);
 }
 
 @layer base {
-  /* Body gradient background - quá phức tạp để viết inline bằng Tailwind */
+  /* Page background behind every frame: the .room wall (only visible on overscroll) */
   body {
-    /* Charcoal neutral background, không còn tint xanh */
     background:
-      radial-gradient(1200px 800px at -10% -10%, rgba(255, 255, 255, 0.04), transparent 60%),
-      radial-gradient(900px 600px at 110% 0%, rgba(255, 255, 255, 0.02), transparent 65%),
-      linear-gradient(180deg, #101010, #141414);
+      radial-gradient(ellipse at top, rgba(255, 255, 255, 0.06), transparent 60%),
+      repeating-linear-gradient(90deg, var(--wall-stripe) 0 2px, var(--wall) 2px 120px), var(--wall);
   }
 
-  /* Global focus styles cho accessibility */
-  :where(a, button, select, textarea):focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(91, 124, 250, 0.22);
-    border-radius: 0.5rem;
+  /* Keyboard focus: dashed chalk-yellow outline, as .btn / .navItem */
+  :where(a, button, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px dashed var(--chalk-yellow);
+    outline-offset: 3px;
   }
 
-  /* Input elements sử dụng focus style riêng từ component */
+  /* Input elements use their own focus style from the component */
   input:focus-visible {
     outline: none;
   }
 
-  /* Selection highlight */
   ::selection {
-    background: rgba(91, 124, 250, 0.3);
+    background: rgba(246, 226, 127, 0.3);
+  }
+
+  /* KaTeX inherits the chalk color it is written with */
+  .katex {
+    color: inherit;
   }
 
   /* Accessibility: respect user's motion preferences */
@@ -111,7 +108,6 @@
     }
   }
 
-  /* Smooth scroll behavior */
   html {
     scroll-behavior: smooth;
   }
@@ -120,5 +116,45 @@
     html {
       scroll-behavior: auto;
     }
+  }
+}
+
+@layer components {
+  /* Skeleton: a chalk track (.progressTrack) with an eraser smudge (.board::after) sweeping across */
+  .bk-skeleton {
+    position: relative;
+    overflow: hidden;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .bk-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 40% 60% at 50% 50%, rgba(255, 255, 255, 0.09), transparent 70%);
+    transform: translateX(-100%);
+    animation: bk-erase 1.6s ease-in-out infinite;
+  }
+
+  @keyframes bk-erase {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bk-skeleton::after {
+      animation: none;
+      transform: none;
+    }
+  }
+
+  /* Data tables scroll horizontally inside their own wrapper, like .questionArea */
+  .bk-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--chalk-faint) transparent;
   }
 }

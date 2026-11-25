@@ -8,11 +8,46 @@ type AttemptWithSession = {
   };
 };
 
+export type SessionTimeSettings = {
+  durationSeconds?: number;
+  bufferMinutes?: number;
+  extensionSeconds?: number; // Tổng thời gian giáo viên đã gia hạn khi session đang chạy
+};
+
+export const DEFAULT_BUFFER_MINUTES = 5;
+export const MAX_EXTENSION_SECONDS = 120 * 60;
+
+/**
+ * Thời lượng làm bài thực tế = durationSeconds + extensionSeconds.
+ * Trả null nếu session không giới hạn thời gian.
+ */
+export function getEffectiveDurationSeconds(settings: unknown): number | null {
+  const s = settings as SessionTimeSettings | null;
+  const durationSeconds = s?.durationSeconds;
+  if (!durationSeconds) {
+    return null;
+  }
+  const extensionSeconds = typeof s?.extensionSeconds === 'number' ? s.extensionSeconds : 0;
+  return durationSeconds + extensionSeconds;
+}
+
+/**
+ * Thời điểm session tự đóng = startedAt + thời lượng thực tế + bufferMinutes.
+ */
+export function calculateSessionEndTime(startedAt: Date, settings: unknown): Date | null {
+  const effective = getEffectiveDurationSeconds(settings);
+  if (!effective) {
+    return null;
+  }
+  const bufferMinutes = (settings as SessionTimeSettings | null)?.bufferMinutes ?? DEFAULT_BUFFER_MINUTES;
+  return new Date(startedAt.getTime() + effective * 1000 + bufferMinutes * 60 * 1000);
+}
+
 /**
  * Tính toán thời gian kết thúc của attempt
- * Logic:
- * - attemptEndTime = attemptStartedAt + durationSeconds
- * - sessionEndTime = session.startedAt + durationSeconds + bufferMinutes
+ * Logic (thời lượng đã cộng phần gia hạn):
+ * - attemptEndTime = attemptStartedAt + effectiveDuration
+ * - sessionEndTime = session.startedAt + effectiveDuration + bufferMinutes
  * - actualEndTime = min(attemptEndTime, sessionEndTime)
  */
 export function calculateAttemptEndTime(
@@ -22,26 +57,14 @@ export function calculateAttemptEndTime(
     return null; // Chưa bắt đầu hoặc session chưa start
   }
 
-  const settings = attempt.quizSession.settings as {
-    durationSeconds?: number;
-    bufferMinutes?: number;
-  } | null;
-
-  const durationSeconds = settings?.durationSeconds;
-  if (!durationSeconds) {
+  const effective = getEffectiveDurationSeconds(attempt.quizSession.settings);
+  const sessionEndTime = calculateSessionEndTime(attempt.quizSession.startedAt, attempt.quizSession.settings);
+  if (!effective || !sessionEndTime) {
     return null; // Không có time limit
   }
 
   // Thời gian kết thúc của attempt (từ lúc bắt đầu làm bài)
-  const attemptEndTime = new Date(
-    attempt.attemptStartedAt.getTime() + durationSeconds * 1000,
-  );
-
-  // Thời gian kết thúc của session (bao gồm buffer)
-  const bufferMinutes = settings?.bufferMinutes ?? 5;
-  const sessionEndTime = new Date(
-    attempt.quizSession.startedAt.getTime() + durationSeconds * 1000 + bufferMinutes * 60 * 1000,
-  );
+  const attemptEndTime = new Date(attempt.attemptStartedAt.getTime() + effective * 1000);
 
   // Lấy thời gian sớm hơn (strict enforcement)
   return attemptEndTime < sessionEndTime ? attemptEndTime : sessionEndTime;

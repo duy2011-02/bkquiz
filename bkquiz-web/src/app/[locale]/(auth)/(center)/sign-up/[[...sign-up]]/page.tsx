@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { Card } from '@/components/ui/Card';
-import { AppConfig } from '@/utils/AppConfig';
+import Link from 'next/link';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import s from '@/components/chalk/chalk.module.css';
+import { AppConfig } from '@/utils/AppConfig';
+import { cn } from '@/utils/cn';
 
 type ISignUpPageProps = {
   params: Promise<{ locale: string }>;
@@ -31,76 +32,54 @@ export default async function SignUpPage(props: ISignUpPageProps) {
   });
 
   return (
-    <div className="mx-auto w-full max-w-md px-4">
-      <Card className="p-8 md:p-10">
-        {/* Logo/Brand */}
-        <div className="mb-6 text-center">
-          <Link
-            href={`/${locale}/`}
-            className="inline-block text-2xl font-bold text-text-heading transition-colors hover:text-primary"
-          >
-            {AppConfig.name}
-          </Link>
-          <p className="mt-2 text-sm text-text-muted">
-            {t('tagline')}
-          </p>
-        </div>
+    <>
+      <div className={s.modal}>
+        <div className={s.modalBoard}>
+          <div className="text-center">
+            <Link href={`/${locale}/`} className={cn(s.script, s.chalk, 'text-4xl font-bold')}>
+              {AppConfig.name}
+            </Link>
+            <p className={cn(s.dim, 'mt-1')}>{t('tagline')}</p>
+          </div>
 
-        {/* Title */}
-        <h1 className="mb-2 text-2xl font-semibold text-text-heading">
-          {t('title')}
-        </h1>
-        <p className="mb-6 text-sm text-text-body">
-          {t('description')}
-        </p>
+          <div className={s.rule} />
 
-        {/* Sign Up Form (same as sign-in) */}
-        <GoogleSignInButton />
+          <h1 className={cn(s.modalTitle, s.chalk)}>{t('title')}</h1>
+          <p className={s.modalText}>{t('description')}</p>
 
-        {/* Already have account */}
-        <div className="mt-6 border-t border-border-subtle pt-6 text-center">
-          <p className="text-sm text-text-muted">
-            {t('already_have_account')}{' '}
-            <Link
-              href={`/${locale}/sign-in`}
-              className="font-medium text-primary hover:underline"
-            >
+          {/* Sign up uses the same Google flow as sign in */}
+          <GoogleSignInButton />
+
+          <div className={s.rule} />
+
+          <p className={cn(s.modalText, 'text-center')}>
+            {t('already_have_account')}
+            {' '}
+            <Link href={`/${locale}/sign-in`} className={cn(s.yellow, 'underline underline-offset-4')}>
               {t('sign_in_link')}
             </Link>
           </p>
-        </div>
 
-        {/* Footer */}
-        <div className="mt-4 text-center">
-          <p className="text-xs text-text-muted">
-            {t('terms_text')}{' '}
-            <Link
-              href={`/${locale}/terms`}
-              className="text-primary hover:underline"
-            >
+          <p className={cn(s.inputHint, 'text-center')}>
+            {t('terms_text')}
+            {' '}
+            <Link href={`/${locale}/terms`} className={cn(s.yellow, 'underline underline-offset-4')}>
               {t('terms_link')}
             </Link>
-            {' '}{t('and')}{' '}
-            <Link
-              href={`/${locale}/privacy`}
-              className="text-primary hover:underline"
-            >
+            {' '}
+            {t('and')}
+            {' '}
+            <Link href={`/${locale}/privacy`} className={cn(s.yellow, 'underline underline-offset-4')}>
               {t('privacy_link')}
             </Link>
             .
           </p>
         </div>
-      </Card>
-
-      {/* Back to home */}
-      <div className="mt-4 text-center">
-        <Link
-          href={`/${locale}/`}
-          className="text-sm text-text-muted hover:text-text-heading transition-colors"
-        >
-          {t('back_to_home')}
-        </Link>
       </div>
-    </div>
+
+      <Link href={`/${locale}/`} className={cn(s.btn, s.ledgeBtn)}>
+        {t('back_to_home')}
+      </Link>
+    </>
   );
 }

@@ -9,14 +9,15 @@ export async function generateMetadata(props: {
   params: Promise<{ locale: string; classId: string }>;
 }): Promise<Metadata> {
   const { locale } = await props.params;
-  await getTranslations({ locale, namespace: 'Dashboard' });
-  return { title: 'Class Detail - BKquiz' };
+  const t = await getTranslations({ locale, namespace: 'Classes.detail' });
+  return { title: `${t('meta_title')} - BKquiz` };
 }
 
 export default async function ClassDetailPage(props: {
-  params: Promise<{ classId: string }>;
+  params: Promise<{ locale: string; classId: string }>;
 }) {
-  const { classId } = await props.params;
+  const { locale, classId } = await props.params;
+  const t = await getTranslations({ locale, namespace: 'Classes' });
   const { userId, devRole } = await requireUser();
   const role = await getUserRole(userId, devRole as 'teacher' | 'student' | undefined);
 
@@ -29,8 +30,8 @@ export default async function ClassDetailPage(props: {
   if (!membership || membership.status !== 'active') {
     return (
       <div className="py-5">
-        <div className="rounded-md border border-danger/40 bg-danger/10 p-4 text-center text-danger">
-          Bạn không có quyền truy cập lớp này.
+        <div className="rounded-hand border border-chalk-pink/40 bg-chalk-pink/10 p-4 text-center text-chalk-pink">
+          {t('no_access')}
         </div>
       </div>
     );
@@ -50,4 +51,3 @@ export default async function ClassDetailPage(props: {
     </div>
   );
 }
-

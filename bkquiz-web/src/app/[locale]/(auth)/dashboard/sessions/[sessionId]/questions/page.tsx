@@ -8,8 +8,8 @@ export async function generateMetadata(props: {
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await props.params;
-  await getTranslations({ locale, namespace: 'Dashboard' });
-  return { title: 'Questions in Session - BKquiz' };
+  const t = await getTranslations({ locale, namespace: 'SessionQuestions' });
+  return { title: `${t('title')} - BKquiz` };
 }
 
 export default async function QuestionsPage(props: {

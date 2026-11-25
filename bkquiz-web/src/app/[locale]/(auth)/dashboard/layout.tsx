@@ -1,9 +1,7 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import Link from 'next/link';
+import { ChalkRoom } from '@/components/chalk/ChalkRoom';
 import { LocaleSwitcher } from '@/components/LocaleSwitcher';
 import { getUserAvailableRoles, getUserRole, requireUser } from '@/server/authz';
-import { AppConfig } from '@/utils/AppConfig';
-import { MobileMenuButton } from './MobileMenuButton';
 import { RoleSwitcher } from './RoleSwitcher';
 import { Sidebar } from './Sidebar';
 import { SignOutButton } from './SignOutButton';
@@ -29,10 +27,24 @@ export default async function DashboardLayout(props: {
     }),
   ]);
 
+  // Account controls sit on the wooden ledge under the board, like the attempt page's exit button
+  const ledge = (
+    <>
+      <LocaleSwitcher />
+      <RoleSwitcher
+        currentRole={role}
+        availableRoles={availableRoles || []}
+        label={t('role_label')}
+        teacherLabel={t('teacher_role')}
+        studentLabel={t('student_role')}
+      />
+      <SignOutButton label={t('sign_out')} />
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-bg-page text-text-body antialiased">
-      <div className="flex h-screen">
-        {/* Sidebar – Desktop: always visible, Mobile: slide in/out */}
+    <ChalkRoom ledge={ledge}>
+      <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
         <Sidebar
           role={role}
           availableRoles={availableRoles}
@@ -50,33 +62,8 @@ export default async function DashboardLayout(props: {
           signOutLabel={t('sign_out')}
         />
 
-        {/* Main column */}
-        <div className="flex min-h-screen flex-1 flex-col">
-          {/* Topbar */}
-          <header className="flex h-16 items-center justify-between border-b border-border-subtle bg-bg-section/90 px-6 py-3 backdrop-blur md:px-8">
-            <div className="flex items-center gap-3">
-              <MobileMenuButton />
-              <Link
-                href={`/${locale}/`}
-                className="text-base font-semibold text-text-heading transition-colors hover:text-primary"
-              >
-                {AppConfig.name}
-              </Link>
-              <span className="hidden text-sm text-text-muted sm:inline">
-                {t('dashboard_label')}
-              </span>
-            </div>
-            <div className="flex items-center gap-4 text-sm">
-              <LocaleSwitcher />
-              <RoleSwitcher currentRole={role} availableRoles={availableRoles || []} />
-              <SignOutButton label={t('sign_out')} />
-            </div>
-          </header>
-
-          {/* Main content */}
-          <main className="px-4 py-4 md:px-6 md:py-6">{props.children}</main>
-        </div>
+        <main className="min-w-0 flex-1">{props.children}</main>
       </div>
-    </div>
+    </ChalkRoom>
   );
 }

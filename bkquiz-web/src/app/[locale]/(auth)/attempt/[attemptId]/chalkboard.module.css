@@ -1,0 +1,358 @@
+/*
+ * Chalkboard parts used only by the student attempt page (question, options, navigator).
+ * The shared system (room, frame, board, ledge, chalk text, buttons, tags, notes, modal,
+ * token input…) lives in src/components/chalk/chalk.module.css; tokens are global
+ * (src/styles/global.css). studentAttempt.tsx merges both: { ...shared, ...local }.
+ *
+ * Do not redefine a shared class name here unless it is a full replacement (see .actions):
+ * a class defined in this file replaces the shared one for this page.
+ */
+
+/* ===== Main layout ===== */
+.main {
+  flex: 1;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1024px) {
+  .main {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 168px;
+    gap: 24px;
+  }
+}
+
+.questionArea {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Desktop: only the question area scrolls when content is long */
+@media (min-width: 1024px) {
+  .questionArea,
+  .side {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--chalk-faint) transparent;
+  }
+
+  .questionArea {
+    padding-right: 10px;
+  }
+}
+
+.questionLabel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  font-size: 1rem;
+}
+
+.questionNumber {
+  font-size: 1.45rem;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+  text-decoration-color: var(--chalk-faint);
+}
+
+.prompt {
+  font-size: 1.3rem;
+  line-height: 1.5;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 768px) {
+  .prompt {
+    font-size: 1.5rem;
+  }
+}
+
+.prompt :global(.katex),
+.option :global(.katex) {
+  color: inherit;
+  font-size: 0.85em;
+}
+
+/* ===== Options ===== */
+.options {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 768px) {
+  .options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+  }
+}
+
+.option {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 1.15rem;
+  line-height: 1.45;
+  color: var(--chalk);
+  background: rgba(255, 255, 255, 0.02);
+  border: 2px solid var(--chalk-faint);
+  border-radius: 14px 18px 12px 20px / 18px 12px 20px 14px;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+  text-align: left;
+}
+
+.option:nth-child(even) {
+  border-radius: 18px 12px 20px 14px / 12px 20px 14px 18px;
+}
+
+.option:hover:not(.optionDisabled) {
+  border-color: var(--chalk-dim);
+  background: rgba(255, 255, 255, 0.05);
+  transform: rotate(-0.4deg);
+}
+
+/* Keyboard focus only (no outline when clicking with the mouse) */
+.option:has(input:focus-visible) {
+  outline: 2px solid var(--chalk-dim);
+  outline-offset: 3px;
+}
+
+.optionSelected {
+  border-color: var(--chalk-yellow);
+  background: rgba(246, 226, 127, 0.08);
+  box-shadow: 0 0 14px rgba(246, 226, 127, 0.15);
+}
+
+.optionCorrect {
+  border-color: var(--chalk-green);
+  background: rgba(180, 240, 168, 0.08);
+}
+
+.optionWrong {
+  border-color: var(--chalk-pink);
+  background: rgba(245, 163, 181, 0.08);
+}
+
+.optionMissed {
+  border-style: dashed;
+  border-color: rgba(180, 240, 168, 0.6);
+}
+
+.optionDisabled {
+  cursor: default;
+}
+
+.hiddenInput {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.letter {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  border: 2px solid transparent;
+  border-radius: 52% 48% 55% 45% / 45% 55% 48% 52%;
+}
+
+/* Selected: a chalk circle drawn around the letter */
+.letterCircled {
+  border-color: currentColor;
+  transform: rotate(-6deg);
+}
+
+.optionContent {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.mark {
+  flex-shrink: 0;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.wrongText {
+  text-decoration: line-through;
+  text-decoration-color: var(--chalk-pink);
+  text-decoration-thickness: 2px;
+}
+
+/* ===== Side list (question navigator) ===== */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (min-width: 1024px) {
+  .side {
+    padding-left: 18px;
+    border-left: 2px dashed var(--chalk-faint);
+  }
+}
+
+.sideTitle {
+  font-size: 1.05rem;
+}
+
+.navGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 4px;
+}
+
+.navItem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  font-family: inherit;
+  font-size: 1rem;
+  color: var(--chalk-dim);
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.navItem:hover {
+  color: var(--chalk);
+  transform: scale(1.1);
+}
+
+.navItem:focus-visible {
+  outline: 2px dashed var(--chalk-yellow);
+  outline-offset: 2px;
+}
+
+.navAnswered {
+  color: var(--chalk-green);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.navCurrent {
+  color: var(--chalk-yellow);
+  border-color: var(--chalk-yellow);
+  border-radius: 52% 48% 55% 45% / 45% 55% 48% 52%;
+  transform: rotate(-5deg);
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.95rem;
+}
+
+.legend > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legendSwatch {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.85rem;
+  color: var(--chalk-dim);
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+
+.legendCurrent {
+  color: var(--chalk-yellow);
+  border-color: var(--chalk-yellow);
+  border-radius: 52% 48% 55% 45% / 45% 55% 48% 52%;
+  transform: rotate(-5deg);
+}
+
+.legendSubmitted {
+  color: var(--chalk-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ===== Question actions (full replacement of the shared .actions: pinned on desktop) ===== */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+/* Desktop: keep nav buttons pinned at the bottom of the scrolling question area */
+@media (min-width: 1024px) {
+  .actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: auto;
+    padding: 14px 0 2px;
+    background: linear-gradient(180deg, transparent, var(--board-dark) 45%);
+  }
+}
+
+/* Soft "page turn" when moving to another question */
+.questionEnter {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: questionEnter 620ms ease-out both;
+}
+
+@keyframes questionEnter {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .questionEnter {
+    animation: none;
+  }
+
+  .option,
+  .navItem {
+    transition: none;
+  }
+}

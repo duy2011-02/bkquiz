@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { calculateSessionEndTime } from '@/server/attemptTimeLimit';
 import { requireUser } from '@/server/authz';
+import { prisma } from '@/server/prisma';
 
 export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await ctx.params;
@@ -46,8 +47,16 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
     return NextResponse.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 });
   }
 
-  const settings = session.settings as { sessionName?: string } | null;
+  const settings = session.settings as {
+    sessionName?: string;
+    durationSeconds?: number;
+    bufferMinutes?: number;
+    extensionSeconds?: number;
+  } | null;
   const sessionName = settings?.sessionName || null;
+  const sessionEndTime = session.startedAt
+    ? calculateSessionEndTime(session.startedAt, session.settings)
+    : null;
 
   // Check if current user has joined (has attempt) - optional, don't fail if not authenticated
   let attemptId: string | null = null;
@@ -73,6 +82,10 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
     quiz: (session as any).quiz,
     classroom: (session as any).classroom,
     sessionName,
+    durationSeconds: settings?.durationSeconds ?? null,
+    bufferMinutes: settings?.bufferMinutes ?? null,
+    extensionSeconds: settings?.extensionSeconds ?? 0,
+    sessionEndTime: sessionEndTime?.toISOString() ?? null, // Mốc tự đóng (đã gồm buffer + gia hạn)
     attemptId, // null if not joined or not authenticated
   });
 }
