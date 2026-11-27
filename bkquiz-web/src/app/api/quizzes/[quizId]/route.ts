@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireQuizOwnership, requireTeacher, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 const UpdateQuizSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -49,6 +50,10 @@ export async function GET(_: Request, ctx: { params: Promise<{ quizId: string }>
 export async function PATCH(req: Request, ctx: { params: Promise<{ quizId: string }> }) {
   try {
     const { userId, devRole } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
     const { quizId } = await ctx.params;
     const body = UpdateQuizSchema.parse(await req.json());
@@ -80,6 +85,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ quizId: strin
 export async function DELETE(_: Request, ctx: { params: Promise<{ quizId: string }> }) {
   try {
     const { userId, devRole } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
     const { quizId } = await ctx.params;
     await requireQuizOwnership(userId, quizId);

@@ -21,6 +21,7 @@
     "check:types": "tsc --noEmit --pretty",
     "check:deps": "knip",
     "check:i18n": "i18n-check -l src/locales -s en -u src -f next-intl",
+    "check:i18n:ci": "i18n-check -l src/locales -s en -u src -f next-intl -e src/locales/fr.json --only invalidKeys missingKeys undefined",
     "commit": "commit",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -35,11 +36,13 @@
     "boilerplate:db:studio": "drizzle-kit studio",
     "storybook": "storybook dev -p 6006",
     "storybook:test": "vitest run --config .storybook/vitest.config.mts",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:e2e:exam": "playwright test tests/e2e/ExamFlow.e2e.ts"
   },
   "dependencies": {
     "@arcjet/next": "^1.0.0-beta.15",
     "@auth/prisma-adapter": "^2.11.1",
+    "@aws-sdk/client-s3": "^3.1178.0",
     "@hookform/resolvers": "^5.2.2",
     "@logtape/logtape": "^1.2.2",
     "@prisma/client": "^6.19.1",

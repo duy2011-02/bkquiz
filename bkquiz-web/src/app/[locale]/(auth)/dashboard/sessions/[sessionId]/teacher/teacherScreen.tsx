@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Table, TableWrap } from '@/components/ui/Table';
 import { cn } from '@/utils/cn';
+import { formatGrade } from '@/utils/formatGrade';
 import { getI18nPath } from '@/utils/Helpers';
 
 type TeacherTokenResponse = {
@@ -60,8 +61,14 @@ type ScoreRow = {
   id: string;
   status: 'active' | 'submitted' | 'locked';
   score: number | null;
+  /** Điểm thang 10 */
+  grade?: number | null;
+  correctCount?: number | null;
+  totalQuestions?: number | null;
   submittedAt: string | null;
   user: { id: string; email: string | null; name: string | null };
+  /** Có cờ nghi vấn (Task 5.4) — màn chiếu chỉ hiện ⚑, lý do xem ở trang Theo dõi */
+  flagged?: boolean;
 };
 
 function formatDuration(startedAt: string | null, notStartedLabel: string): string {
@@ -449,6 +456,21 @@ export function TeacherScreen(props: { sessionId: string; userId: string | null 
                         </Button>
                       )
                     : null}
+                  {/* Trang giám sát mở ở tab riêng trên máy giáo viên — không hiện tên sinh viên lên màn chiếu */}
+                  <Link
+                    href={getI18nPath(`/dashboard/sessions/${props.sessionId}/monitor`, locale)}
+                    target="_blank"
+                    className={cn(cs.btn, cs.btnSm)}
+                  >
+                    {t('open_monitor')}
+                  </Link>
+                  <Link
+                    href={getI18nPath(`/dashboard/sessions/${props.sessionId}/stats`, locale)}
+                    target="_blank"
+                    className={cn(cs.btn, cs.btnSm)}
+                  >
+                    {t('open_stats')}
+                  </Link>
                   {session?.status !== 'ended'
                     ? (
                         <Button size="sm" onClick={() => void fetchToken()}>
@@ -460,7 +482,7 @@ export function TeacherScreen(props: { sessionId: string; userId: string | null 
               </div>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-lg">
-                <h1 className={cn(cs.title, cs.script, cs.chalk, 'whitespace-normal')}>
+                <h1 className={cn(cs.title, cs.chalk, 'whitespace-normal')}>
                   {session?.sessionName || session?.quiz?.title || t('loading')}
                 </h1>
                 <span className="text-chalk-dim">{session?.classroom?.name ?? '...'}</span>
@@ -1002,9 +1024,22 @@ export function TeacherScreen(props: { sessionId: string; userId: string | null 
                                       <tr key={s.id} className="text-sm odd:bg-white/5">
                                         <td className="p-2 text-chalk/85">
                                           {s.user.email ?? s.user.name ?? s.user.id}
+                                          {s.flagged
+                                            ? (
+                                                <span className="ml-2 text-chalk-yellow" title={t('flagged_mark_label')}>
+                                                  <span aria-hidden="true">⚑</span>
+                                                  <span className="sr-only">{t('flagged_mark_label')}</span>
+                                                </span>
+                                              )
+                                            : null}
                                         </td>
                                         <td className="p-2 font-mono text-chalk-dim">{s.status}</td>
-                                        <td className="p-2 font-mono text-chalk/85">{s.score ?? '-'}</td>
+                                        <td className="p-2 font-mono whitespace-nowrap text-chalk/85">
+                                          {s.grade !== null && s.grade !== undefined ? `${formatGrade(s.grade)}/10` : '-'}
+                                          {s.correctCount !== null && s.correctCount !== undefined && s.totalQuestions
+                                            ? <span className="ml-2 text-chalk-dim">{`(${s.correctCount}/${s.totalQuestions})`}</span>
+                                            : null}
+                                        </td>
                                         <td className="p-2 font-mono text-chalk-dim">
                                           {s.submittedAt ? new Date(s.submittedAt).toLocaleTimeString(locale) : '-'}
                                         </td>

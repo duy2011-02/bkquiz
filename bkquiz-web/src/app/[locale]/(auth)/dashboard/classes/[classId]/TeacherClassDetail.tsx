@@ -33,6 +33,7 @@ export function TeacherClassDetail(props: TeacherClassDetailProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeTab, setActiveTab] = useState<'members' | 'sessions' | 'settings'>('members');
   const [showCreateSessionModal, setShowCreateSessionModal] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [quizzes, setQuizzes] = useState<QuizLite[]>([]);
   const [selectedQuizId, setSelectedQuizId] = useState('');
   const [quizSearchQuery, setQuizSearchQuery] = useState('');
@@ -103,6 +104,8 @@ export function TeacherClassDetail(props: TeacherClassDetailProps) {
         return t('error_already_member');
       case 'CLASS_HAS_ACTIVE_SESSION':
         return t('error_class_has_active_session');
+      case 'CLASS_ARCHIVED':
+        return t('error_class_archived');
       case 'INVALID_INPUT':
         return t('error_invalid_input');
       default:
@@ -177,6 +180,27 @@ export function TeacherClassDetail(props: TeacherClassDetailProps) {
         return;
       }
       setToast({ message: t('class_renamed'), type: 'success' });
+      await loadClassInfo();
+    } finally {
+      setManageBusy(false);
+    }
+  }
+
+  async function setArchived(archived: boolean) {
+    setManageBusy(true);
+    try {
+      const res = await fetch(`/api/classes/${classId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ archived }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) {
+        setToast({ message: manageErrorMessage(json.error), type: 'error' });
+        return;
+      }
+      setShowArchiveModal(false);
+      setToast({ message: archived ? t('class_archived_success') : t('class_unarchived_success'), type: 'success' });
       await loadClassInfo();
     } finally {
       setManageBusy(false);
@@ -369,6 +393,7 @@ export function TeacherClassDetail(props: TeacherClassDetailProps) {
   }
 
   const isOwner = classInfo.userRole === 'teacher';
+  const isArchived = !!classInfo.archivedAt;
 
   return (
     <div className="space-y-7">
@@ -394,11 +419,13 @@ export function TeacherClassDetail(props: TeacherClassDetailProps) {
       <ClassHeader
         classInfo={classInfo}
         isOwner={isOwner}
-        onCreateSession={() => {
-          setShowCreateSessionModal(true);
-          // Set default start time when opening modal
-          setScheduledStartTime(getRoundedTime(5));
-        }}
+        onCreateSession={isArchived
+          ? undefined
+          : () => {
+              setShowCreateSessionModal(true);
+              // Set default start time when opening modal
+              setScheduledStartTime(getRoundedTime(5));
+            }}
       />
 
       {/* Stats Cards */}
@@ -504,11 +531,13 @@ export function TeacherClassDetail(props: TeacherClassDetailProps) {
             <SessionsList
               sessions={sessions}
               isStudent={false}
-              onCreateSession={() => {
-                setShowCreateSessionModal(true);
-                // Set default start time when opening modal
-                setScheduledStartTime(getRoundedTime(5));
-              }}
+              onCreateSession={isArchived || !isOwner
+                ? undefined
+                : () => {
+                    setShowCreateSessionModal(true);
+                    // Set default start time when opening modal
+                    setScheduledStartTime(getRoundedTime(5));
+                  }}
             />
           )}
 
@@ -585,6 +614,24 @@ export function TeacherClassDetail(props: TeacherClassDetailProps) {
                 </div>
               </Card>
 
+              <div className="rounded-hand border border-chalk-faint bg-white/2 p-4">
+                <div className="text-base font-medium text-chalk">{isArchived ? t('unarchive_class_title') : t('archive_class_title')}</div>
+                <div className="mt-1 text-sm text-chalk-dim">{isArchived ? t('unarchive_class_hint') : t('archive_class_hint')}</div>
+                <div className="mt-3">
+                  {isArchived
+                    ? (
+                        <Button size="sm" disabled={manageBusy} onClick={() => void setArchived(false)}>
+                          {t('unarchive_class_button')}
+                        </Button>
+                      )
+                    : (
+                        <Button size="sm" disabled={manageBusy} onClick={() => setShowArchiveModal(true)}>
+                          {t('archive_class_button')}
+                        </Button>
+                      )}
+                </div>
+              </div>
+
               <div className="rounded-hand border border-chalk-pink/40 bg-chalk-pink/5 p-4">
                 <div className="text-base font-medium text-chalk-pink">{t('danger_zone')}</div>
                 <div className="mt-2 text-base text-chalk">{t('delete_class_title')}</div>
@@ -620,6 +667,26 @@ export function TeacherClassDetail(props: TeacherClassDetailProps) {
           )}
         </div>
       </Card>
+
+      {/* Archive confirmation */}
+      <Modal
+        open={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        dismissible={!manageBusy}
+        title={t('archive_class_confirm_title', { name: classInfo.name })}
+        footer={(
+          <>
+            <Button onClick={() => setShowArchiveModal(false)} disabled={manageBusy}>
+              {t('cancel')}
+            </Button>
+            <Button variant="solid" onClick={() => void setArchived(true)} loading={manageBusy}>
+              {t('archive_class_button')}
+            </Button>
+          </>
+        )}
+      >
+        <p className="text-base text-chalk">{t('archive_class_confirm_body')}</p>
+      </Modal>
 
       {/* Create Session Modal */}
       <Modal

@@ -246,4 +246,69 @@ MVP khuyến nghị:
 - `createdAt` timestamptz NOT NULL
 - PK (`groupId`,`teacherId`)
 
+## 5) Thay đổi trong Đợt 5 (26/11/2026)
 
+> Theo `bkquiz-web/prisma/schema.prisma` (tên bảng/cột theo Prisma, khác bản thiết kế ban đầu ở trên).
+
+### 5.1 `RateLimit` (migration `add_rate_limit`)
+Bộ đếm rate limit theo cửa sổ cố định.
+- `key` text — `<nhóm>:user:<id>` hoặc `<nhóm>:ip:<ip>`
+- `windowStart` timestamp
+- `count` int DEFAULT 0
+- PK (`key`, `windowStart`); index (`windowStart`) — cron `sessions/auto` xoá bản ghi cũ hơn 24 giờ
+
+### 5.2 `Attempt` — cột mới (migration `add_attempt_monitoring`, `add_attempt_events`)
+- `lastSeenAt` timestamp NULL — lần cuối client gọi `state`/`answers` (ghi tối đa 10 s/lần)
+- `extraSeconds` int DEFAULT 0 — gia hạn riêng (cộng vào cả mốc kết thúc chung cho riêng bài này)
+- `deviceId` text NULL — mã thiết bị đầu tiên làm bài
+
+### 5.3 `CheckpointEventType` — giá trị mới
+- `teacher_unlock`, `teacher_extend` (`dueAt` = giờ kết thúc mới), `teacher_submit`
+
+### 5.4 `AttemptEvent` (migration `add_attempt_events`)
+Hành vi khi làm bài, dùng để gắn cờ nghi vấn (không lưu nội dung copy/paste, không lưu IP).
+- `id` cuid PK
+- `attemptId` FK -> Attempt(id) ON DELETE CASCADE
+- `type` enum `AttemptEventType`: `tab_hidden | window_blur | copy | paste | device_changed`
+- `at` timestamp — thời điểm phía client, đã kẹp trong khoảng làm bài
+- `durationMs` int NULL — với `tab_hidden` / `window_blur`
+- `deviceId` text NULL — chỉ với `device_changed`
+- `createdAt` timestamp
+- UNIQUE (`attemptId`, `type`, `deviceId`) — mỗi thiết bị mới ghi 1 lần (NULL không trùng nhau nên sự kiện khác không bị ảnh hưởng); index (`attemptId`, `at`)
+
+### 5.5 `Attempt` — điểm thang 10 (migration `add_attempt_result_counts`, 27/11/2026)
+- `correctCount` int NULL — số câu đúng hoàn toàn (chọn đúng chính xác tập đáp án đúng)
+- `totalQuestions` int NULL — số câu được giao cho bài này (đề biến thể: có thể khác nhau giữa các sinh viên)
+- Cả hai ghi lúc nộp bài; migration điền lại cho các bài đã nộp trước đó.
+- `score` vẫn là **điểm thô**: mỗi câu tối đa 1 điểm, tối đa = `totalQuestions`. Thống kê câu hỏi và cờ nghi vấn dùng điểm thô.
+- Điểm hiển thị cho sinh viên / giáo viên là **thang 10**: `grade = score / totalQuestions × 10`, làm tròn 2 chữ số (`toTenPointScale` trong `src/server/scoring.ts`). Ví dụ 5 câu → mỗi câu 2 điểm; 20 câu → mỗi câu 0,5 điểm; tối đa luôn là 10.
+
+## 6) Thay đổi trong Đợt 6 (27/11/2026)
+
+### 6.1 `Classroom.archivedAt` (migration `add_classroom_archived`)
+- `archivedAt` timestamp NULL — lớp đã lưu trữ (kết thúc): không tạo phiên, không tham gia bằng mã, không thêm thành viên; vẫn xem được kết quả. `NULL` = đang hoạt động.
+
+### 6.2 Ảnh câu hỏi (migration `add_question_image`)
+- `Question.imageUrl` text NULL, `Question.imageAlt` text NULL — ảnh minh hoạ (URL công khai) và mô tả cho trình đọc màn hình.
+- `SessionQuestionSnapshot.imageUrl`, `imageAlt` — chép từ `Question` lúc tạo đề (`quizSnapshot.ts`). Sửa / bỏ ảnh trong ngân hàng không đổi đề của phiên đã tạo.
+- File ảnh nằm trong bucket `bkquiz-media` (MinIO local / Supabase Storage), key `questions/<userId>/<id>.<ext>`. Xoá câu hỏi không xoá file ảnh (snapshot của phiên cũ vẫn dùng).
+
+### 6.3 Không đổi schema
+- ~~Vai trò trợ giảng dùng giá trị `ta` có sẵn trong `ClassroomRole`~~ — đã gỡ ở Đợt 7 (mục 7.1).
+- Câu Đúng/Sai lưu như `mcq_single` có 2 phương án.
+
+## 7) Thay đổi trong Đợt 7 (27/11/2026)
+
+### 7.1 `ClassroomRole` bỏ `ta` (migration `remove_classroom_ta_role`)
+- Enum chỉ còn `student`, `teacher`. Migration chuyển thành viên `ta` (nếu có) về `student`, rồi tạo lại kiểu enum (Postgres không xoá được một giá trị enum). Default cột `roleInClass` vẫn là `student`.
+
+### 7.2 Chọn vai trò + yêu cầu làm giáo viên (migration `add_teacher_requests`)
+- `User.onboardedAt` timestamp NULL: đã chọn vai trò ở lần đăng nhập đầu. Migration điền `now()` cho mọi user có sẵn. User dev tạo mới cũng được điền.
+- Enum `TeacherRequestStatus`: `pending | approved | rejected`.
+- Bảng `TeacherRequest`:
+  - `id` cuid PK; `userId` UNIQUE FK → User (CASCADE): mỗi người 1 yêu cầu, gửi lại = cập nhật;
+  - `organization` text (trường / đơn vị); `note` text NULL;
+  - `status` (mặc định `pending`); `createdAt`, `updatedAt`;
+  - `reviewedAt`, `reviewedById` (quản trị viên), `reviewNote` (lý do từ chối);
+  - index (`status`, `createdAt`).
+- Duyệt = thêm `UserRole(userId, teacher)`; thu hồi = xoá dòng đó. Quản trị viên xác định bằng env `ADMIN_EMAILS`, không lưu trong DB.

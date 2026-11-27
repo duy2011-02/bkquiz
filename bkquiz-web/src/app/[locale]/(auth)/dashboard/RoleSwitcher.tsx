@@ -7,7 +7,8 @@ import { cn } from '@/utils/cn';
 
 type RoleSwitcherProps = {
   currentRole: 'teacher' | 'student';
-  availableRoles?: ('teacher' | 'student')[]; // Giữ để tương thích, nhưng không dùng nữa
+  /** Các vai trò tài khoản được dùng (chỉ render khi ≥ 2) */
+  roles: ('teacher' | 'student')[];
   label: string;
   teacherLabel: string;
   studentLabel: string;
@@ -15,6 +16,7 @@ type RoleSwitcherProps = {
 
 export function RoleSwitcher({
   currentRole,
+  roles: allowedRoles,
   label,
   teacherLabel,
   studentLabel,
@@ -22,9 +24,9 @@ export function RoleSwitcher({
   const [isLoading, setIsLoading] = useState(false);
 
   const roles: Array<{ value: 'teacher' | 'student'; label: string }> = [
-    { value: 'teacher', label: teacherLabel },
-    { value: 'student', label: studentLabel },
-  ];
+    { value: 'teacher' as const, label: teacherLabel },
+    { value: 'student' as const, label: studentLabel },
+  ].filter(r => allowedRoles.includes(r.value));
 
   const handleChange: ChangeEventHandler<HTMLSelectElement> = async (event) => {
     const newRole = event.target.value as 'teacher' | 'student';

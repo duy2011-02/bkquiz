@@ -19,8 +19,10 @@ type ClassroomLite = {
   name: string;
   classCode: string;
   createdAt: string;
+  /** Lớp đã lưu trữ (kết thúc) */
+  archivedAt?: string | null;
   ownerTeacherId: string;
-  roleInClass: 'student' | 'ta' | 'teacher';
+  roleInClass: 'student' | 'teacher';
   joinedAt: string;
   memberCount: number;
   tags?: Array<{ id: string; name: string; normalizedName: string }>;
@@ -179,7 +181,7 @@ export function ClassesPanel(props: ClassesPanelProps) {
         setError('JOIN_FAILED: Empty response');
         return;
       }
-      let json: { id?: string; error?: string };
+      let json: { id?: string; error?: string; retryAfterSeconds?: number };
       try {
         json = JSON.parse(text);
       } catch (err) {
@@ -188,7 +190,15 @@ export function ClassesPanel(props: ClassesPanelProps) {
         return;
       }
       if (!res.ok || !json.id) {
-        setError(json.error === 'CLASS_BANNED' ? t('class_banned') : (json.error ?? 'JOIN_FAILED'));
+        setError(
+          json.error === 'CLASS_BANNED'
+            ? t('class_banned')
+            : json.error === 'CLASS_ARCHIVED'
+              ? t('class_archived_join')
+              : json.error === 'RATE_LIMITED'
+                ? t('rate_limited', { seconds: json.retryAfterSeconds ?? 60 })
+                : (json.error ?? 'JOIN_FAILED'),
+        );
         return;
       }
       setJoinCode('');
@@ -212,8 +222,10 @@ export function ClassesPanel(props: ClassesPanelProps) {
     try {
       const res = await fetch(`/api/classes/preview?classCode=${encodeURIComponent(classCode)}`);
       if (!res.ok) {
-        const json = await res.json() as { error?: string };
-        setError(json.error ?? 'CLASS_NOT_FOUND');
+        const json = await res.json() as { error?: string; retryAfterSeconds?: number };
+        setError(json.error === 'RATE_LIMITED'
+          ? t('rate_limited', { seconds: json.retryAfterSeconds ?? 60 })
+          : (json.error === 'CLASS_ARCHIVED' ? t('class_archived_join') : (json.error ?? 'CLASS_NOT_FOUND')));
         setShowJoinModal(false);
         setPendingClassCode(null);
         // Clear query param on error
@@ -271,21 +283,103 @@ export function ClassesPanel(props: ClassesPanelProps) {
     router.replace('/dashboard/classes');
   }
 
+  const activeClasses = classes.filter(c => !c.archivedAt);
+  const archivedClasses = classes.filter(c => !!c.archivedAt);
+
+  function renderClassRow(c: ClassroomLite, idx: number) {
+    return (
+      <Link key={c.id} href={`/dashboard/classes/${c.id}`}>
+        <div
+          className="rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
+          style={{ animationDelay: `${idx * 30}ms` }}
+        >
+          <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between md:gap-4">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 md:grid md:grid-cols-[2fr_auto_120px_100px] md:gap-4">
+              <div className="min-w-0 basis-full md:basis-auto">
+                <div className="truncate text-base font-medium text-chalk">{c.name}</div>
+                <div className="mt-1 text-sm text-chalk-dim">
+                  {t('member_count', { count: c.memberCount })}
+                </div>
+              </div>
+              {c.tags && c.tags.length > 0
+                ? (
+                    <div className="flex flex-wrap items-center gap-1">
+                      {c.tags.slice(0, 5).map((tag) => {
+                        const isSelected = isTagSelected(tag.name);
+                        return (
+                          <Badge
+                            key={tag.id}
+                            variant={isSelected ? 'info' : 'neutral'}
+                            className={`cursor-pointer text-sm transition-colors ${
+                              isSelected
+                                ? 'border-chalk-yellow/40 bg-chalk-yellow/20 hover:bg-chalk-yellow/30'
+                                : 'hover:bg-chalk-yellow/10'
+                            }`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleTagFilter(tag.name);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleTagFilter(tag.name);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          >
+                            {tag.name}
+                          </Badge>
+                        );
+                      })}
+                      {c.tags.length > 5 && (
+                        <Badge variant="neutral" className="text-sm">
+                          +
+                          {c.tags.length - 5}
+                        </Badge>
+                      )}
+                    </div>
+                  )
+                : <span className="hidden md:block" />}
+              <div className="flex flex-wrap items-center gap-1">
+                <Badge
+                  variant={c.roleInClass === 'teacher' ? 'success' : 'neutral'}
+                  className="text-sm"
+                >
+                  {c.roleInClass === 'teacher' ? t('role_owner') : t('role_student')}
+                </Badge>
+                {c.archivedAt ? <Badge variant="neutral" className="text-sm">{t('archived_badge')}</Badge> : null}
+              </div>
+              <div className="text-sm text-chalk-dim">
+                <span className="font-mono">{c.classCode}</span>
+              </div>
+            </div>
+            <div className="hidden items-center gap-2 md:flex">
+              <span className="text-sm text-chalk-dim">→</span>
+            </div>
+          </div>
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <div className="space-y-7">
       {/* Breadcrumb */}
       <nav className="text-base">
         <div className="flex items-center gap-2 text-chalk-dim">
           <Link href="/dashboard" className="transition-colors hover:text-chalk">
-            Dashboard
+            {t('breadcrumb_dashboard')}
           </Link>
           <span>·</span>
-          <span className="text-chalk">Classes</span>
+          <span className="text-chalk">{t('meta_title')}</span>
           <Badge
             variant={role === 'teacher' ? 'success' : 'info'}
             className="ml-2 px-1.5 py-0.5 text-sm"
           >
-            {role === 'teacher' ? 'Teacher' : 'Student'}
+            {role === 'teacher' ? t('role_teacher') : t('role_student')}
           </Badge>
         </div>
       </nav>
@@ -294,7 +388,7 @@ export function ClassesPanel(props: ClassesPanelProps) {
       <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">Classes</h1>
+            <h1 className="font-chalk text-[1.6rem] leading-tight chalk-glow text-chalk md:text-[2rem]">{t('meta_title')}</h1>
             <div className="mt-1 text-base text-chalk-dim">
               {role === 'teacher'
                 ? t('manage_your_classes')
@@ -353,9 +447,9 @@ export function ClassesPanel(props: ClassesPanelProps) {
                       variant="ghost"
                       disabled={busy || joinCode.trim().length === 0}
                       onClick={() => void joinClass()}
-                      className=""
+                      className="whitespace-nowrap"
                     >
-                      Join
+                      {t('join_button')}
                     </Button>
                   </div>
                 </label>
@@ -383,9 +477,9 @@ export function ClassesPanel(props: ClassesPanelProps) {
                       variant="primary"
                       disabled={busy || joinCode.trim().length === 0}
                       onClick={() => void joinClass()}
-
+                      className="whitespace-nowrap"
                     >
-                      Join
+                      {t('join_button')}
                     </Button>
                   </div>
                 </label>
@@ -476,79 +570,21 @@ export function ClassesPanel(props: ClassesPanelProps) {
               </div>
             )
           : (
-              <div className="mt-4 space-y-3">
-                {classes.map((c, idx) => (
-                  <Link key={c.id} href={`/dashboard/classes/${c.id}`}>
-                    <div
-                      className="rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
-                      style={{ animationDelay: `${idx * 30}ms` }}
-                    >
-                      <div className="flex items-center justify-between gap-4 px-4 py-3">
-                        <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_auto_auto] items-center gap-4 md:grid-cols-[2fr_auto_120px_100px]">
-                          <div className="min-w-0">
-                            <div className="truncate text-base font-medium text-chalk">{c.name}</div>
-                            <div className="mt-1 text-sm text-chalk-dim">
-                              {t('member_count', { count: c.memberCount })}
-                            </div>
-                          </div>
-                          {c.tags && c.tags.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1">
-                              {c.tags.slice(0, 5).map((tag) => {
-                                const isSelected = isTagSelected(tag.name);
-                                return (
-                                  <Badge
-                                    key={tag.id}
-                                    variant={isSelected ? 'info' : 'neutral'}
-                                    className={`cursor-pointer text-sm transition-colors ${
-                                      isSelected
-                                        ? 'border-chalk-yellow/40 bg-chalk-yellow/20 hover:bg-chalk-yellow/30'
-                                        : 'hover:bg-chalk-yellow/10'
-                                    }`}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      toggleTagFilter(tag.name);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        toggleTagFilter(tag.name);
-                                      }
-                                    }}
-                                    role="button"
-                                    tabIndex={0}
-                                  >
-                                    {tag.name}
-                                  </Badge>
-                                );
-                              })}
-                              {c.tags.length > 5 && (
-                                <Badge variant="neutral" className="text-sm">
-                                  +
-                                  {c.tags.length - 5}
-                                </Badge>
-                              )}
-                            </div>
-                          )}
-                          <Badge
-                            variant={c.roleInClass === 'teacher' ? 'success' : (c.roleInClass === 'ta' ? 'info' : 'neutral')}
-                            className="text-sm"
-                          >
-                            {c.roleInClass === 'teacher' ? 'Owner' : (c.roleInClass === 'ta' ? 'TA' : 'Student')}
-                          </Badge>
-                          <div className="text-sm text-chalk-dim">
-                            <span className="font-mono">{c.classCode}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-chalk-dim">→</span>
-                        </div>
-                      </div>
+              <>
+                <div className="mt-4 space-y-3">
+                  {activeClasses.map((c, idx) => renderClassRow(c, idx))}
+                </div>
+                {archivedClasses.length > 0 && (
+                  <details className="mt-5">
+                    <summary className="cursor-pointer text-base text-chalk-dim hover:text-chalk">
+                      {t('archived_group', { count: archivedClasses.length })}
+                    </summary>
+                    <div className="mt-3 space-y-3">
+                      {archivedClasses.map((c, idx) => renderClassRow(c, idx))}
                     </div>
-                  </Link>
-                ))}
-              </div>
+                  </details>
+                )}
+              </>
             )}
       </Card>
 

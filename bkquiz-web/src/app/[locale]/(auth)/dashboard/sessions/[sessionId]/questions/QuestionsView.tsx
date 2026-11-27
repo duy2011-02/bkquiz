@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import s from '@/components/chalk/chalk.module.css';
 import { MathRenderer } from '@/components/MathRenderer';
+import { QuestionImage } from '@/components/QuestionImage';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -16,6 +17,8 @@ type Question = {
   order: number;
   type: 'mcq_single' | 'mcq_multi';
   prompt: string;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
   sourceQuestionId: string;
   options: Array<{
     order: number;
@@ -191,11 +194,11 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
       <nav className="text-base">
         <div className="flex items-center gap-2 text-chalk-dim">
           <Link href="/dashboard" className="transition-colors hover:text-chalk">
-            Dashboard
+            {t('breadcrumb_dashboard')}
           </Link>
           <span>·</span>
           <Link href="/dashboard/sessions" className="transition-colors hover:text-chalk">
-            Sessions
+            {t('breadcrumb_sessions')}
           </Link>
           <span>·</span>
           <span className="text-chalk">{t('breadcrumb_questions')}</span>
@@ -206,7 +209,7 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
       <Card className="p-5 md:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
+            <h1 className="font-chalk text-[1.6rem] leading-tight chalk-glow text-chalk md:text-[2rem]">
               {t('title')}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-base text-chalk-dim">
@@ -299,6 +302,7 @@ export function QuestionsView(props: { sessionId: string; userId: string | null 
                         {/* Prompt */}
                         <div className="mt-2 text-base text-chalk/85">
                           <MathRenderer content={question.prompt} className="font-sans" />
+                          <QuestionImage url={question.imageUrl} alt={question.imageAlt} className="mt-3" />
                         </div>
 
                         {/* Options */}

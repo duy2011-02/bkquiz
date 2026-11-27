@@ -10,12 +10,13 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { TagFilter } from '@/components/ui/TagFilter';
 import { Toast } from '@/components/ui/Toast';
+import { duplicateQuiz } from './duplicateQuiz';
 
 type ClassroomLite = {
   id: string;
   name: string;
   classCode: string;
-  roleInClass: 'student' | 'ta' | 'teacher';
+  roleInClass: 'student' | 'teacher';
 };
 
 type QuizLite = {
@@ -172,6 +173,22 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
     }
   }
 
+  async function handleDuplicate(q: QuizLite) {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await duplicateQuiz(q.id, t('copy_title', { title: q.title }));
+      if ('error' in result) {
+        setToast({ message: t('duplicate_failed'), type: 'error' });
+        return;
+      }
+      setToast({ message: t('duplicate_success'), type: 'success' });
+      router.push(`/dashboard/quizzes/${result.id}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function updateQuizStatus(quizId: string, status: QuizLite['status']) {
     setBusy(true);
     setError(null);
@@ -211,7 +228,7 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
       <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">{t('title')}</h1>
+            <h1 className="font-chalk text-[1.6rem] leading-tight chalk-glow text-chalk md:text-[2rem]">{t('title')}</h1>
             <div className="mt-1 text-base text-chalk-dim">
               {t('description')}
             </div>
@@ -311,9 +328,9 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
                       className="rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
                       style={{ animationDelay: `${idx * 30}ms` }}
                     >
-                      <div className="flex items-center justify-between gap-4 px-4 py-3">
-                        <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_auto_auto] items-center gap-4 md:grid-cols-[2fr_auto_120px_100px]">
-                          <div className="min-w-0">
+                      <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between md:gap-4">
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 md:grid md:grid-cols-[2fr_auto_120px_100px] md:gap-4">
+                          <div className="min-w-0 basis-full md:basis-auto">
                             <div className="truncate text-base font-medium text-chalk">{q.title}</div>
                             {typeof q.ruleCount === 'number' && (
                               <div className="mt-1 text-sm text-chalk-dim">
@@ -367,7 +384,7 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
                             variant={q.status === 'published' ? 'success' : (q.status === 'archived' ? 'neutral' : 'warning')}
                             className="text-sm"
                           >
-                            {q.status}
+                            {t(q.status)}
                           </Badge>
                           <div className="text-sm text-chalk-dim">
                             {formatDate(q.updatedAt)}
@@ -390,6 +407,18 @@ export function QuizzesPanel(_props: { classrooms: ClassroomLite[] }) {
                                 </Button>
                               )
                             : null}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void handleDuplicate(q);
+                            }}
+                          >
+                            {t('duplicate')}
+                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"

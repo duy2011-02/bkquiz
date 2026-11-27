@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser } from '@/server/authz';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit, getClientIp } from '@/server/rateLimit';
 
 const JoinClassSchema = z.object({
   classCode: z.string().trim().min(4).max(32),
@@ -9,15 +10,22 @@ const JoinClassSchema = z.object({
 
 export async function POST(req: Request) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('classJoin', `user:${userId}`, ['classJoinIp', `ip:${getClientIp(req)}`]);
+  if (limited) {
+    return limited;
+  }
   const body = JoinClassSchema.parse(await req.json());
 
   const classroom = await prisma.classroom.findUnique({
     where: { classCode: body.classCode.toUpperCase() },
-    select: { id: true, name: true, classCode: true },
+    select: { id: true, name: true, classCode: true, archivedAt: true },
   });
 
   if (!classroom) {
     return NextResponse.json({ error: 'CLASS_NOT_FOUND' }, { status: 404 });
+  }
+  if (classroom.archivedAt) {
+    return NextResponse.json({ error: 'CLASS_ARCHIVED' }, { status: 409 });
   }
 
   // Thành viên bị chủ lớp chặn không tự join lại được (chủ lớp có thể thêm lại bằng email)
@@ -44,5 +52,5 @@ export async function POST(req: Request) {
     },
   });
 
-  return NextResponse.json(classroom);
+  return NextResponse.json({ id: classroom.id, name: classroom.name, classCode: classroom.classCode });
 }

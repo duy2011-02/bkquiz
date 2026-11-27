@@ -2,6 +2,8 @@ import { prisma } from '@/server/prisma';
 
 type AttemptWithSession = {
   attemptStartedAt: Date | null;
+  /** Gia hạn riêng cho bài này (giáo viên, trang giám sát). Không có → 0. */
+  extraSeconds?: number | null;
   quizSession: {
     startedAt: Date | null;
     settings: unknown;
@@ -16,6 +18,8 @@ export type SessionTimeSettings = {
 
 export const DEFAULT_BUFFER_MINUTES = 5;
 export const MAX_EXTENSION_SECONDS = 120 * 60;
+/** Tổng gia hạn riêng tối đa cho một bài làm. */
+export const MAX_ATTEMPT_EXTRA_SECONDS = 60 * 60;
 
 /**
  * Thời lượng làm bài thực tế = durationSeconds + extensionSeconds.
@@ -46,9 +50,13 @@ export function calculateSessionEndTime(startedAt: Date, settings: unknown): Dat
 /**
  * Tính toán thời gian kết thúc của attempt
  * Logic (thời lượng đã cộng phần gia hạn):
- * - attemptEndTime = attemptStartedAt + effectiveDuration
- * - sessionEndTime = session.startedAt + effectiveDuration + bufferMinutes
+ * - attemptEndTime = attemptStartedAt + effectiveDuration + extraSeconds
+ * - sessionEndTime = session.startedAt + effectiveDuration + bufferMinutes + extraSeconds
  * - actualEndTime = min(attemptEndTime, sessionEndTime)
+ *
+ * extraSeconds (gia hạn riêng) được cộng vào cả mốc session của riêng bài đó, để sinh viên bị mất giờ
+ * (hỏng máy, mất mạng…) vẫn được làm bù kể cả khi đã gần hết giờ chung. Cron không tự đóng session
+ * khi còn bài đang trong giờ gia hạn riêng (xem api/sessions/auto).
  */
 export function calculateAttemptEndTime(
   attempt: AttemptWithSession,
@@ -64,10 +72,12 @@ export function calculateAttemptEndTime(
   }
 
   // Thời gian kết thúc của attempt (từ lúc bắt đầu làm bài)
-  const attemptEndTime = new Date(attempt.attemptStartedAt.getTime() + effective * 1000);
+  const extraMs = Math.max(0, attempt.extraSeconds ?? 0) * 1000;
+  const attemptEndTime = new Date(attempt.attemptStartedAt.getTime() + effective * 1000 + extraMs);
+  const sessionEndForAttempt = new Date(sessionEndTime.getTime() + extraMs);
 
   // Lấy thời gian sớm hơn (strict enforcement)
-  return attemptEndTime < sessionEndTime ? attemptEndTime : sessionEndTime;
+  return attemptEndTime < sessionEndForAttempt ? attemptEndTime : sessionEndForAttempt;
 }
 
 /**
@@ -81,6 +91,7 @@ export async function validateAttemptTimeLimit(
     where: { id: attemptId },
     select: {
       attemptStartedAt: true,
+      extraSeconds: true,
       status: true,
       quizSession: {
         select: {

@@ -1,6 +1,29 @@
 # ✅ Pre-Deployment Checklist
 
-Checklist đầy đủ trước khi deploy bkquiz-web lên Vercel + Supabase.
+Checklist đầy đủ trước khi deploy bkquiz-web lên Vercel + Supabase. Các bước làm cụ thể: [DEPLOYMENT_SUPABASE.md](./DEPLOYMENT_SUPABASE.md).
+
+## 0. Đợt 5–6 (cập nhật 27/11/2026)
+
+### Đã sẵn sàng trong code
+- [x] Rate limit API bật mặc định (`src/server/rateLimit.ts`); **không** đặt `RATE_LIMIT_DISABLED` trên production.
+- [x] `vercel.json`: cron gọi `/api/sessions/auto` mỗi ngày (17:00 UTC). Cron dọn bộ đếm rate limit và bắt đầu / kết thúc phiên đến giờ.
+- [x] `/api/sessions/auto` nhận `GET` + `Authorization: Bearer <CRON_SECRET>` (Vercel Cron) và `POST` từ người đã đăng nhập (màn chiếu). Đã bỏ kiểm tra user-agent (giả mạo được). Đã thử: không quyền → 401; giả `vercel-cron/1.0` → 401; GET có secret → chạy job.
+- [x] `/api/dev/role` trả 404 khi không có `DEV_BYPASS_AUTH=1`; đã thử.
+- [x] `.env.example` viết lại theo biến thật của dự án (bỏ Clerk / Neon của boilerplate), có cảnh báo `DEV_BYPASS_AUTH`.
+- [x] Ảnh câu hỏi: `S3_*` + `S3_PUBLIC_BASE_URL` (Supabase Storage); server tự kiểm tra loại / kích thước ảnh.
+- [x] 17 migration, gồm `add_rate_limit`, `add_attempt_monitoring`, `add_attempt_events`, `add_attempt_result_counts`, `add_classroom_archived`, `add_question_image`.
+- [x] Unit test (`npx vitest run --project unit`), e2e luồng thi (`npm run test:e2e:exam`), CI ở `.github/workflows/ci.yml`.
+- [x] Đo với 200 câu (DB local, 27/11): nhập 0,6 s; xuất 51 ms; tạo đề 24 ms; tải đề 46 ms; nộp + chấm 47 ms; bảng điểm 35 ms; thống kê 48 ms. Trên Supabase mỗi truy vấn chậm hơn vài ms do đi qua mạng; việc tạo đề ghi tuần tự từng câu nên cần đo lại trên staging.
+
+### Phải làm khi deploy (xem DEPLOYMENT_SUPABASE.md)
+- [ ] **Không đặt** `DEV_BYPASS_AUTH`, `BKQUIZ_CHECKPOINT_SECONDS`, `RATE_LIMIT_DISABLED` trên Vercel.
+- [ ] Đặt `CRON_SECRET` trên Vercel.
+- [ ] Đặt `ADMIN_EMAILS` (email Google của quản trị viên) để duyệt yêu cầu làm giáo viên (Đợt 7).
+- [ ] Bucket `bkquiz-media` (Public) + khoá S3 riêng của Supabase Storage.
+- [ ] Google OAuth: redirect URI `https://<domain>/api/auth/callback/google`; thêm tài khoản demo vào *Test users*.
+- [ ] Function region của Vercel cùng vùng với Supabase (Singapore).
+- [ ] Sau deploy: chạy 10 bước kiểm tra ở bước 7 của DEPLOYMENT_SUPABASE.md.
+
 
 ---
 
@@ -12,15 +35,15 @@ Checklist đầy đủ trước khi deploy bkquiz-web lên Vercel + Supabase.
 - [x] Giảm database queries từ O(n²) xuống O(n)
 
 ### ⚠️ Export Route (Cần kiểm tra)
-- [ ] Test export với 100+ questions
-- [ ] Nếu chậm, consider streaming response
-- [ ] Add `maxDuration` nếu cần
+- [x] Test export với 100+ questions (200 câu: 51 ms, 27/11)
+- [x] Nếu chậm, consider streaming response (không cần)
+- [x] Add `maxDuration` nếu cần (`maxDuration = 10` đã có)
 
 **File:** `src/app/api/pools/[poolId]/export/route.ts`
 
 ### ⚠️ Submit Route (Đã có cache)
 - [x] Đã có `questionScores` caching
-- [ ] Test với 200+ questions để đảm bảo < 10s
+- [x] Test với 200+ questions để đảm bảo < 10s (200 câu: 47 ms trên DB local, 27/11)
 
 **File:** `src/app/api/attempts/[attemptId]/submit/route.ts`
 
@@ -34,9 +57,9 @@ Checklist đầy đủ trước khi deploy bkquiz-web lên Vercel + Supabase.
 ## 🔧 2. Configuration
 
 ### Environment Variables
-- [ ] Tạo file `.env.example` với tất cả required variables
-- [ ] Document tất cả environment variables
-- [ ] Verify không có secrets hardcoded
+- [x] Tạo file `.env.example` với tất cả required variables (viết lại 27/11)
+- [x] Document tất cả environment variables (`.env.example` + bảng ở DEPLOYMENT_SUPABASE.md bước 5)
+- [x] Verify không có secrets hardcoded (`.env.example` chỉ có giá trị MinIO / Postgres local)
 
 **Required variables:**
 ```env
@@ -49,12 +72,15 @@ AUTH_GOOGLE_ID="..."
 AUTH_GOOGLE_SECRET="..."
 NEXT_PUBLIC_APP_URL="https://..."
 
-# Storage (Supabase)
+CRON_SECRET="..."
+
+# Storage (Supabase) — khoá S3 lấy ở Project Settings → Storage → S3 Connection (KHÔNG phải service_role key)
 S3_ENDPOINT="https://[project-ref].supabase.co/storage/v1/s3"
-S3_REGION="us-east-1"
-S3_ACCESS_KEY_ID="[project-ref]"
-S3_SECRET_ACCESS_KEY="[service_role_key]"
+S3_REGION="ap-southeast-1"
+S3_ACCESS_KEY_ID="[access key id]"
+S3_SECRET_ACCESS_KEY="[secret access key]"
 S3_BUCKET="bkquiz-media"
+S3_PUBLIC_BASE_URL="https://[project-ref].supabase.co/storage/v1/object/public/bkquiz-media"
 ```
 
 ### Next.js Config
@@ -81,7 +107,7 @@ S3_BUCKET="bkquiz-media"
 ### Storage
 - [ ] Tạo bucket `bkquiz-media`
 - [ ] Set bucket public (hoặc configure CORS)
-- [ ] Lấy credentials (project-ref, service_role_key)
+- [ ] Lấy credentials: access key S3 riêng của Storage (không dùng project-ref / service_role_key)
 - [ ] Test upload/download files
 
 ### Security
@@ -117,10 +143,10 @@ S3_BUCKET="bkquiz-media"
 
 ### Local Testing
 - [ ] Test với Supabase database (không phải local)
-- [ ] Test import 100+ questions
-- [ ] Test export 100+ questions
-- [ ] Test submit attempt với 100+ questions
-- [ ] Test upload/download files
+- [x] Test import 100+ questions (200 câu: 0,6 s)
+- [x] Test export 100+ questions (200 câu: 51 ms)
+- [x] Test submit attempt với 100+ questions (200 câu: 47 ms)
+- [x] Test upload/download files (MinIO local, Task 6.5)
 
 ### Production Testing
 - [ ] Test login/logout

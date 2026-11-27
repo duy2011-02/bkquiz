@@ -1,0 +1,89 @@
+# CI của BKquiz. GitHub chỉ đọc workflow ở `.github/` tại gốc repo, nên các file cũ trong
+# `bkquiz-web/.github/workflows/` (của boilerplate) không bao giờ chạy.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+defaults:
+  run:
+    working-directory: bkquiz-web
+
+jobs:
+  checks:
+    name: Type check, i18n, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: bkquiz-web/package-lock.json
+
+      - run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type checking
+        run: npm run check:types
+
+      - name: I18n (thiếu key, key sai cấu trúc, key chưa định nghĩa)
+        run: npm run check:i18n:ci
+
+      - name: Unit tests (nghiệp vụ, môi trường node)
+        run: npx vitest run --project unit
+
+  e2e:
+    name: E2E exam flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bkquiz
+          POSTGRES_PASSWORD: bkquiz
+          POSTGRES_DB: bkquiz
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U bkquiz"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # playwright.config.ts dựng server riêng: migrate → build → next start, với DEV_BYPASS_AUTH=1
+      E2E_DATABASE_URL: postgresql://bkquiz:bkquiz@localhost:5433/bkquiz_e2e?schema=public
+      AUTH_SECRET: ci-only-not-a-real-secret
+      NEXT_PUBLIC_SENTRY_DISABLED: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: bkquiz-web/package-lock.json
+
+      - run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run exam flow
+        run: npm run test:e2e:exam -- --project=chromium
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: bkquiz-web/test-results/
+          retention-days: 7

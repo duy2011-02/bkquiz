@@ -1,3 +1,5 @@
+> **Lỗi thời (25/11/2026):** bảng màu charcoal + cam trong tài liệu này đã được thay bằng hệ thiết kế bảng đen – phấn màu. Xem `docs/uiux/guidelines.md`.
+
 # Design Tokens Review & Recommendations
 
 ## 📊 Tổng quan hiện tại

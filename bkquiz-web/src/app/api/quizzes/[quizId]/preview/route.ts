@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireQuizOwnership, requireTeacher, requireUser } from '@/server/authz';
+import { checkAuthz } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
 
 type RuleFilters = { poolIds?: string[] };
@@ -8,7 +9,10 @@ type QuizSettings = { variant?: VariantSettings };
 
 export async function GET(_: Request, ctx: { params: Promise<{ quizId: string }> }) {
   const { userId, devRole } = await requireUser();
-  await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
+  const roleDenied = await checkAuthz(() => requireTeacher(userId, devRole as 'teacher' | 'student' | undefined));
+  if (roleDenied) {
+    return roleDenied;
+  }
   const { quizId } = await ctx.params;
 
   try {

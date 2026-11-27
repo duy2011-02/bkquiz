@@ -1,25 +1,30 @@
 'use client';
 
+import type { SuspicionFlag } from '@/server/suspicion';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import s from '@/components/chalk/chalk.module.css';
 import { MathRenderer } from '@/components/MathRenderer';
+import { QuestionImage } from '@/components/QuestionImage';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/utils/cn';
+import { formatGrade, questionPointsOnTenScale } from '@/utils/formatGrade';
 import { getI18nPath } from '@/utils/Helpers';
 
 type AttemptStatus = 'active' | 'submitted' | 'locked';
-type CheckpointType = 'scheduled' | 'verify_ok' | 'verify_fail' | 'locked';
+type CheckpointType = 'scheduled' | 'verify_ok' | 'verify_fail' | 'locked' | 'teacher_unlock' | 'teacher_extend' | 'teacher_submit';
 
 type DetailQuestion = {
   sessionQuestionId: string;
   order: number;
   type: 'mcq_single' | 'mcq_multi';
   prompt: string;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
   options: Array<{ order: number; content: string; isCorrect: boolean; selected: boolean }>;
   answered: boolean;
   isFullyCorrect: boolean;
@@ -32,6 +37,8 @@ type AttemptDetailResponse = {
     status: AttemptStatus;
     score: number | null;
     maxScore: number;
+    /** Điểm thang 10 */
+    grade: number | null;
     attemptStartedAt: string | null;
     submittedAt: string | null;
     failedCount: number;
@@ -42,6 +49,8 @@ type AttemptDetailResponse = {
   scoring: { mode: 'all_or_nothing' | 'partial' | 'penalty' };
   questions: DetailQuestion[];
   checkpoints: Array<{ type: CheckpointType; ok: boolean | null; enteredToken: string | null; dueAt: string | null; createdAt: string }>;
+  events: Array<{ id: string; type: 'tab_hidden' | 'window_blur' | 'copy' | 'paste' | 'device_changed'; at: string; durationMs: number | null }>;
+  flags: SuspicionFlag[];
 };
 
 type Filter = 'all' | 'wrong' | 'unanswered';
@@ -75,6 +84,9 @@ function checkpointVariant(type: CheckpointType) {
   }
   if (type === 'locked') {
     return 'danger' as const;
+  }
+  if (type.startsWith('teacher_')) {
+    return 'info' as const;
   }
   return 'neutral' as const;
 }
@@ -166,7 +178,35 @@ export function AttemptDetailView(props: { sessionId: string; attemptId: string 
     );
   }
 
-  const { attempt, user, session, questions, checkpoints, scoring } = data;
+  const { attempt, user, session, questions, checkpoints, scoring, events, flags } = data;
+
+  /** "45 giây" / "2 phút 10 giây" */
+  const formatSeconds = (total: number) => {
+    const seconds = Math.max(0, Math.round(total));
+    return seconds < 60
+      ? t('duration_seconds', { seconds })
+      : t('duration_minutes', { minutes: Math.floor(seconds / 60), seconds: seconds % 60 });
+  };
+
+  const flagText = (f: SuspicionFlag) => {
+    const p = f.params;
+    switch (f.code) {
+      case 'TAB_AWAY':
+        return t('flag_TAB_AWAY', { count: p.count ?? 0, duration: formatSeconds(p.seconds ?? 0) });
+      case 'FAST_SUBMIT':
+        return t('flag_FAST_SUBMIT', { duration: formatSeconds(p.seconds ?? 0), percent: p.percent ?? 0 });
+      case 'DEVICE_CHANGED':
+        return t('flag_DEVICE_CHANGED', { devices: p.devices ?? 0 });
+      case 'SHARED_DEVICE':
+        return t('flag_SHARED_DEVICE', { accounts: p.accounts ?? 0 });
+      case 'TOKEN_GUESSING':
+        return t('flag_TOKEN_GUESSING', { count: p.count ?? 0 });
+      case 'COPY_PASTE':
+        return t('flag_COPY_PASTE', { paste: p.paste ?? 0, copy: p.copy ?? 0 });
+      default:
+        return f.code;
+    }
+  };
   const isSubmitted = attempt.status === 'submitted';
   const fullyCorrectCount = questions.filter(q => q.isFullyCorrect).length;
   const unansweredCount = questions.filter(q => !q.answered).length;
@@ -198,7 +238,7 @@ export function AttemptDetailView(props: { sessionId: string; attemptId: string 
       <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
+            <h1 className="font-chalk text-[1.6rem] leading-tight chalk-glow text-chalk md:text-[2rem]">
               {user.name || user.email || user.id}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-base text-chalk-dim">
@@ -223,7 +263,7 @@ export function AttemptDetailView(props: { sessionId: string; attemptId: string 
           <div className="rounded-hand border border-chalk-faint p-3">
             <div className="text-sm text-chalk-dim">{t('score')}</div>
             <div className="mt-1 font-mono text-xl font-semibold text-chalk">
-              {isSubmitted && attempt.score !== null ? `${attempt.score} / ${attempt.maxScore}` : '-'}
+              {isSubmitted && attempt.grade !== null ? `${formatGrade(attempt.grade)} / 10` : '-'}
             </div>
             <div className="mt-1 text-sm text-chalk-dim">{t(`scoring_${scoring.mode}`)}</div>
           </div>
@@ -318,12 +358,18 @@ export function AttemptDetailView(props: { sessionId: string; attemptId: string 
                         {statusBadge}
                       </div>
                       <div className="shrink-0 font-mono text-base text-chalk">
-                        {q.score !== null ? t('question_score', { score: q.score }) : '-'}
+                        {q.score !== null
+                          ? t('question_score', {
+                              score: formatGrade(questionPointsOnTenScale(q.score, questions.length)),
+                              max: formatGrade(questionPointsOnTenScale(1, questions.length)),
+                            })
+                          : '-'}
                       </div>
                     </div>
 
                     <div className="mt-2 text-base text-chalk/85">
                       <MathRenderer content={q.prompt} className="font-sans" />
+                      <QuestionImage url={q.imageUrl} alt={q.imageAlt} size="sm" className="mt-3" />
                     </div>
 
                     <div className="mt-3 space-y-1.5">
@@ -366,6 +412,40 @@ export function AttemptDetailView(props: { sessionId: string; attemptId: string 
         </div>
       </Card>
 
+      {/* Hành vi khi làm bài (gắn cờ nghi vấn) */}
+      <Card className="p-5 md:p-6">
+        <h2 className="text-lg font-semibold text-chalk">{t('behavior_heading')}</h2>
+        {flags.length === 0
+          ? <div className={cn(s.note, s.dim, 'mt-3')}>{t('no_flags')}</div>
+          : (
+              <ul className="mt-3 space-y-2">
+                {flags.map(f => (
+                  <li key={f.code} className={cn(s.note, f.severity === 'high' ? s.pink : s.yellow, 'flex flex-wrap items-center gap-2')}>
+                    <Badge variant={f.severity === 'high' ? 'danger' : 'warning'}>{t(`flag_severity_${f.severity}`)}</Badge>
+                    <span className={s.modalText}>{flagText(f)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+        <p className="mt-3 text-base text-chalk-dim">{t('flags_note')}</p>
+
+        {events.length === 0
+          ? <div className="mt-3 text-base text-chalk-dim">{t('no_events')}</div>
+          : (
+              <ol className="mt-3 space-y-2 border-l border-chalk-faint pl-4">
+                {events.map(e => (
+                  <li key={e.id} className="flex flex-wrap items-center gap-2 text-base">
+                    <span className="font-mono text-chalk-dim">{formatTime(e.at)}</span>
+                    <Badge variant={e.type === 'device_changed' || e.type === 'paste' ? 'warning' : 'neutral'}>{t(`event_${e.type}`)}</Badge>
+                    {e.durationMs
+                      ? <span className="text-chalk-dim">{t('event_duration', { duration: formatSeconds(e.durationMs / 1000) })}</span>
+                      : null}
+                  </li>
+                ))}
+              </ol>
+            )}
+      </Card>
+
       {/* Nhật ký checkpoint */}
       <Card className="p-5 md:p-6">
         <h2 className="text-lg font-semibold text-chalk">{t('checkpoints_heading')}</h2>
@@ -388,6 +468,9 @@ export function AttemptDetailView(props: { sessionId: string; attemptId: string 
                       : null}
                     {c.dueAt && c.type === 'scheduled'
                       ? <span className="text-chalk-dim">{t('due_at', { time: formatTime(c.dueAt) })}</span>
+                      : null}
+                    {c.dueAt && c.type === 'teacher_extend'
+                      ? <span className="text-chalk-dim">{t('new_end_time', { time: formatTime(c.dueAt) })}</span>
                       : null}
                   </li>
                 ))}

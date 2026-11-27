@@ -16,6 +16,24 @@ export function handleAuthorizationError(error: unknown): NextResponse | null {
 }
 
 /**
+ * Chạy một kiểm tra quyền (requireTeacher, requireStudent…): lỗi phân quyền → NextResponse (403 / 404) để route
+ * trả về ngay; lỗi khác ném tiếp. Dùng ở các route gọi kiểm tra quyền ngoài khối try — trước đây lỗi phân quyền
+ * ở đó thành 500.
+ */
+export async function checkAuthz(check: () => Promise<unknown>): Promise<NextResponse | null> {
+  try {
+    await check();
+    return null;
+  } catch (error) {
+    const response = handleAuthorizationError(error);
+    if (response) {
+      return response;
+    }
+    throw error;
+  }
+}
+
+/**
  * Wrapper for API route handlers to catch and handle authorization errors
  * Usage:
  * ```ts

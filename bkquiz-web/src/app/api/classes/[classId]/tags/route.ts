@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireTeacherInClassroom, requireUser } from '@/server/authz';
+import { AuthorizationError, requireClassroomOwnership, requireTeacherInClassroom, requireUser } from '@/server/authz';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 import { parseTagsInput, upsertTags, validateTagsCount } from '@/server/tags';
 
 const UpdateTagsSchema = z.object({
@@ -44,14 +45,18 @@ export async function GET(_: Request, ctx: { params: Promise<{ classId: string }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ classId: string }> }) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   const { classId } = await ctx.params;
   const body = UpdateTagsSchema.parse(await req.json());
 
   try {
-    await requireTeacherInClassroom(userId, classId);
+    // Sửa tag lớp: chỉ chủ lớp (thuộc tab Cài đặt)
+    await requireClassroomOwnership(userId, classId);
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    if (error === 'CLASSROOM_NOT_FOUND') {
+    if (err instanceof AuthorizationError && err.code === 'CLASSROOM_NOT_FOUND') {
       return NextResponse.json({ error: 'CLASSROOM_NOT_FOUND' }, { status: 404 });
     }
     return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });

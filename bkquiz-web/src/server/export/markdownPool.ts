@@ -1,8 +1,12 @@
 import matter from 'gray-matter';
+import { imageMarkdown } from '@/utils/questionImage';
 
 type Question = {
   type: 'mcq_single' | 'mcq_multi';
   prompt: string;
+  /** Ảnh minh hoạ — xuất thành một dòng `![alt](url)` ngay sau đề bài */
+  imageUrl?: string | null;
+  imageAlt?: string | null;
   options: Array<{ content: string; isCorrect: boolean; order: number }>;
   tags: Array<{ name: string }>;
 };
@@ -40,8 +44,11 @@ export function generatePoolMarkdown(pool: Pool): string {
     // Question marker
     blockLines.push('# QUESTION:');
 
-    // Prompt
+    // Prompt (+ ảnh)
     blockLines.push(q.prompt);
+    if (q.imageUrl) {
+      blockLines.push(imageMarkdown({ url: q.imageUrl, alt: q.imageAlt ?? '' }));
+    }
 
     // Tags (inline JSON array)
     const tagsArray = q.tags.map(t => t.name);
@@ -85,8 +92,11 @@ export function generateQuestionMarkdown(q: Question): string {
   // Question marker
   blockLines.push('# QUESTION:');
 
-  // Prompt
+  // Prompt (+ ảnh)
   blockLines.push(q.prompt);
+  if (q.imageUrl) {
+    blockLines.push(imageMarkdown({ url: q.imageUrl, alt: q.imageAlt ?? '' }));
+  }
 
   // Tags (inline JSON array)
   const tagsArray = q.tags.map(t => t.name);

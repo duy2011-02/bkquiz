@@ -1,7 +1,7 @@
 import type { ResolvedScoring } from '@/server/scoring';
 import { validateAttemptTimeLimit } from '@/server/attemptTimeLimit';
 import { prisma } from '@/server/prisma';
-import { resolveScoringSettings, scoreAttempt } from '@/server/scoring';
+import { attemptResult, resolveScoringSettings, scoreAttempt } from '@/server/scoring';
 
 export type SubmitAttemptBy = 'student' | 'teacher';
 
@@ -9,6 +9,8 @@ export type SubmitAttemptResult
   = | {
     ok: true;
     attempt: { id: string; status: string; submittedAt: Date | null; score: number | null };
+    /** Điểm thang 10 */
+    grade: number | null;
     totalQuestions: number;
     correctCount: number;
     scoring: ResolvedScoring;
@@ -86,6 +88,8 @@ export async function submitAttempt(attemptId: string, opts: { by: SubmitAttempt
       submittedAt: new Date(),
       score: result.score,
       questionScores: result.questionScores,
+      correctCount: result.correctCount,
+      totalQuestions: result.totalQuestions,
     },
     select: { id: true, status: true, submittedAt: true, score: true },
   });
@@ -93,6 +97,7 @@ export async function submitAttempt(attemptId: string, opts: { by: SubmitAttempt
   return {
     ok: true,
     attempt: updated,
+    grade: attemptResult({ score: updated.score, correctCount: result.correctCount, totalQuestions: result.totalQuestions }).grade,
     totalQuestions: result.totalQuestions,
     correctCount: result.correctCount,
     scoring,

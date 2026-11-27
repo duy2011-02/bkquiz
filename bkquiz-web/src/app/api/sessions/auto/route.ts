@@ -1,35 +1,58 @@
 import { NextResponse } from 'next/server';
-import { calculateSessionEndTime } from '@/server/attemptTimeLimit';
+import { calculateAttemptEndTime, calculateSessionEndTime } from '@/server/attemptTimeLimit';
+import { requireUser } from '@/server/authz';
 import { prisma } from '@/server/prisma';
 import { buildSessionSnapshotIfNeeded } from '@/server/quizSnapshot';
+import { cleanupRateLimits } from '@/server/rateLimit';
 
 /**
- * API endpoint để tự động start/end sessions
- * Có thể được gọi từ:
- * - Cron job (Vercel Cron, external cron service)
- * - Client polling (từ teacher screen)
- * - Webhook từ external scheduler
+ * Còn bài đang làm trong giờ gia hạn riêng (giáo viên gia hạn cho từng sinh viên trên trang giám sát)?
+ * Khi đó chưa tự đóng session dù đã qua mốc chung.
+ */
+async function hasAttemptInExtraTime(session: { id: string; startedAt: Date | null; settings: unknown }, now: Date) {
+  const extended = await prisma.attempt.findMany({
+    where: { sessionId: session.id, status: { in: ['active', 'locked'] }, extraSeconds: { gt: 0 } },
+    select: { attemptStartedAt: true, extraSeconds: true },
+  });
+  return extended.some((a) => {
+    const end = calculateAttemptEndTime({ ...a, quizSession: { startedAt: session.startedAt, settings: session.settings } });
+    return end !== null && end > now;
+  });
+}
+
+function hasCronSecret(req: Request) {
+  const secret = process.env.CRON_SECRET;
+  return !!secret && req.headers.get('authorization') === `Bearer ${secret}`;
+}
+
+/**
+ * Ai được kích hoạt: cron (header `Authorization: Bearer <CRON_SECRET>`) hoặc người đã đăng nhập (màn chiếu của
+ * giáo viên gọi khi đang mở). Endpoint chỉ bắt đầu / kết thúc phiên đã đến giờ nên cho người đăng nhập gọi là an toàn.
+ * Không đặt CRON_SECRET (dev) → ai cũng gọi được.
+ * Trước đây khi có CRON_SECRET thì màn chiếu (không có header) bị 401, và kiểm tra thêm user-agent
+ * `vercel-cron/1.0` — giả mạo được.
+ */
+async function isAllowed(req: Request) {
+  if (!process.env.CRON_SECRET || hasCronSecret(req)) {
+    return true;
+  }
+  try {
+    await requireUser();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Tự động start / end sessions. Được gọi từ:
+ * - Vercel Cron (GET kèm `Authorization: Bearer <CRON_SECRET>`, cấu hình trong `vercel.json`) hoặc cron ngoài;
+ * - màn chiếu của giáo viên (POST) khi đang mở.
  */
 export async function POST(req: Request) {
-  // Vercel Cron automatically sends Authorization: Bearer <CRON_SECRET> header
-  // Also check user agent for additional verification
-  const authHeader = req.headers.get('authorization');
-  const userAgent = req.headers.get('user-agent');
-  const apiKey = process.env.CRON_SECRET;
-
-  // If CRON_SECRET is set, require authentication
-  // Vercel Cron will send: Authorization: Bearer <CRON_SECRET>
-  // User agent will be: vercel-cron/1.0
-  if (apiKey) {
-    const hasValidAuth = authHeader === `Bearer ${apiKey}`;
-    const isVercelCron = userAgent === 'vercel-cron/1.0';
-
-    // Allow if has valid auth OR is from Vercel Cron (for extra safety)
-    if (!hasValidAuth && !isVercelCron) {
-      return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-    }
+  if (!(await isAllowed(req))) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   }
-  // If no CRON_SECRET is set, allow all requests (dev mode)
 
   const now = new Date();
   const results = {
@@ -108,7 +131,7 @@ export async function POST(req: Request) {
         const endTime = calculateSessionEndTime(session.startedAt, session.settings);
 
         if (endTime) {
-          if (endTime <= now) {
+          if (endTime <= now && !(await hasAttemptInExtraTime(session, now))) {
             // Auto-end the session
             await prisma.quizSession.update({
               where: { id: session.id },
@@ -125,7 +148,16 @@ export async function POST(req: Request) {
       }
     }
 
+    // 3. Dọn bộ đếm rate limit cũ hơn 1 ngày (có index theo windowStart nên rẻ)
+    let rateLimitCleaned = 0;
+    try {
+      rateLimitCleaned = await cleanupRateLimits(24, now);
+    } catch (err) {
+      results.errors.push(`Failed to clean rate limits: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     return NextResponse.json({
+      rateLimitCleaned,
       success: true,
       timestamp: now.toISOString(),
       ...results,
@@ -142,8 +174,14 @@ export async function POST(req: Request) {
   }
 }
 
-// GET endpoint for health check
-export async function GET() {
+/**
+ * Vercel Cron gọi bằng GET (kèm `Authorization: Bearer <CRON_SECRET>`) → chạy như POST.
+ * Không có secret → chỉ trả trạng thái (health check).
+ */
+export async function GET(req: Request) {
+  if (hasCronSecret(req)) {
+    return POST(req);
+  }
   return NextResponse.json({
     status: 'ok',
     message: 'Auto session management endpoint',

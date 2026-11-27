@@ -4,17 +4,19 @@ export type ClassInfo = {
   classCode: string;
   createdAt: string;
   updatedAt: string;
+  /** Lớp đã lưu trữ (kết thúc): không tạo phiên, không tham gia / thêm thành viên */
+  archivedAt?: string | null;
   ownerTeacherId: string;
   ownerTeacher: { id: string; name: string | null; email: string | null };
   memberCount: number;
-  userRole: 'student' | 'ta' | 'teacher';
+  userRole: 'student' | 'teacher';
   joinedAt: string;
 };
 
 export type Member = {
   userId: string;
   user: { id: string; name: string | null; email: string | null };
-  roleInClass: 'student' | 'ta' | 'teacher';
+  roleInClass: 'student' | 'teacher';
   joinedAt: string;
 };
 
@@ -32,6 +34,10 @@ export type Session = {
   attempt?: {
     id: string;
     score: number | null;
+    /** Điểm thang 10 */
+    grade?: number | null;
+    correctCount?: number | null;
+    totalQuestions?: number | null;
     submittedAt: string | null;
     status: string;
   };

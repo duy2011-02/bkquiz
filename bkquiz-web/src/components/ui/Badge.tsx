@@ -17,7 +17,7 @@ export function Badge(props: HTMLAttributes<HTMLSpanElement> & { variant?: Varia
 
   return (
     <span
-      className={cn(s.tag, color, 'font-chalk', className)}
+      className={cn(s.tag, color, className)}
       {...rest}
     />
   );

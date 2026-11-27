@@ -183,3 +183,31 @@ export function scoreAttempt(input: {
     questionScores,
   };
 }
+
+/** Thang điểm hiển thị cho sinh viên / giáo viên. */
+export const GRADE_SCALE = 10;
+
+/**
+ * Quy điểm thô (mỗi câu tối đa 1 điểm, tối đa = số câu được giao) về thang 10, làm tròn 2 chữ số.
+ * Ví dụ: 5 câu → mỗi câu 2 điểm; 20 câu → mỗi câu 0,5 điểm; tối đa luôn là 10.
+ */
+export function toTenPointScale(score: number, totalQuestions: number): number {
+  if (!(totalQuestions > 0)) {
+    return 0;
+  }
+  const grade = (Math.max(0, score) / totalQuestions) * GRADE_SCALE;
+  return Math.round(Math.min(GRADE_SCALE, grade) * 100) / 100;
+}
+
+/**
+ * Kết quả bài làm trả về cho giao diện, đọc từ các cột `Attempt.score` / `correctCount` / `totalQuestions`.
+ * `grade` (thang 10) là `null` khi bài chưa chấm.
+ */
+export function attemptResult(a: { score: number | null; correctCount: number | null; totalQuestions: number | null }): {
+  grade: number | null;
+  correctCount: number | null;
+  totalQuestions: number | null;
+} {
+  const grade = a.score !== null && a.totalQuestions !== null ? toTenPointScale(a.score, a.totalQuestions) : null;
+  return { grade, correctCount: a.correctCount, totalQuestions: a.totalQuestions };
+}

@@ -41,6 +41,8 @@ Chỉ dùng khi:
 
 ## 2) Cú pháp `questions.md` (1 file = 1 question pool)
 
+> **Lưu ý (27/11/2026):** các mục 2.1–2.4 dưới đây là thiết kế ban đầu (front-matter YAML cho từng câu). Hệ thống hiện đọc định dạng ở **mục 2.6** (`# QUESTION:` / `## TAGS:` / `## ANSWER:`) — cũng là định dạng của chức năng xuất Markdown và của file mẫu [`cau-hoi-mau.md`](./cau-hoi-mau.md).
+
 ### 2.1 Nguyên tắc
 - **Mỗi file `questions.md` tương ứng đúng 1 `QuestionPool`**.
 - File có **pool-level front-matter** ở đầu file (khai báo thông tin pool + default).
@@ -148,6 +150,69 @@ Tính giá trị:
 (x) \( \frac{1}{3} \)
 ( ) \( \frac{1}{4} \)
 ```
+
+### 2.6 Định dạng hệ thống đang đọc (`src/server/import/markdownPool.ts`)
+Front-matter của pool (mục 2.2) ở đầu file, sau đó mỗi câu là một khối:
+
+```md
+# QUESTION:
+Đề bài (markdown, LaTeX)
+## TAGS: ["tag-1", "tag-2"]
+## ANSWER:
+( ) phương án sai
+(x) phương án đúng
+```
+
+- `(x)` / `( )`: câu một đáp án; `[x]` / `[ ]`: câu nhiều đáp án. Loại câu tự nhận theo dấu của phương án đầu tiên.
+- Câu bị bỏ qua (kèm cảnh báo) khi thiếu đề, thiếu `## ANSWER:`, có ít hơn 2 phương án, câu một đáp án không có đúng 1 đáp án đúng, hoặc câu nhiều đáp án không có đáp án đúng nào.
+- Nhận cả file xuống dòng kiểu Windows (CRLF).
+
+#### Ảnh minh hoạ (27/11/2026)
+Một dòng `![mô tả](url)` **riêng** trong đề bài là ảnh của câu. Dòng này được tách khỏi đề bài, lưu vào `Question.imageUrl` / `imageAlt`, và hiện dưới đề bài trong lúc làm bài, xem lại và thống kê.
+
+```md
+# QUESTION:
+Quan sát sơ đồ mạch rồi tính cường độ dòng điện qua R1.
+![Sơ đồ mạch gồm R1 và R2 mắc song song](https://<kho-ảnh>/bkquiz-media/questions/abc.png)
+## TAGS: ["dien-hoc"]
+## ANSWER:
+(x) 1 A
+( ) 2 A
+```
+
+- URL phải là `http(s)` tuyệt đối. Ảnh tải lên từ form soạn câu có sẵn URL dạng này; có thể dùng URL công khai bất kỳ.
+- Mỗi câu một ảnh (dòng ảnh đầu tiên). Ảnh viết giữa câu chữ không được tách.
+- Xuất Markdown ghi lại dòng ảnh ngay sau đề bài, nên "Sửa bằng Markdown → Nhập lại" giữ được ảnh. Xoá dòng ảnh khi sửa thì câu không còn ảnh.
+- **Nhập `.zip` có thư mục ảnh (Đợt 7):**
+  - dòng ảnh dùng đường dẫn tương đối, ví dụ `![Sơ đồ](assets/a.png)`, `./assets/b.png`, `assets/do%20thi.png`; tính từ thư mục chứa `questions.md`;
+  - server đọc ảnh trong zip, kiểm tra theo nội dung (PNG / JPEG / WebP, ≤ 2 MB), tải lên kho ảnh, rồi thay bằng URL công khai;
+  - tối đa 100 ảnh mỗi lần nhập;
+  - ảnh thiếu / sai loại / quá lớn → cảnh báo; câu vẫn được nhập, dòng ảnh giữ nguyên trong đề để giáo viên sửa;
+  - đường dẫn có `..` hoặc tuyệt đối bị bỏ qua;
+  - chưa cấu hình kho ảnh (`S3_*`) → không tải ảnh, có cảnh báo;
+  - **giới hạn trên Vercel:** body request tối đa 4,5 MB, nên file zip phải nhỏ hơn mức này.
+
+#### Câu Đúng/Sai (27/11/2026)
+Viết 1 dòng đáp án thay cho danh sách phương án. Câu được lưu thành câu một đáp án với 2 phương án, phương án đầu là "Đúng", nên chấm điểm và thống kê như câu một đáp án.
+
+```md
+# QUESTION:
+Trái Đất quay quanh Mặt Trời.
+## TAGS: ["dia-ly"]
+## ANSWER:
+Đáp án: Đúng
+
+# QUESTION:
+2 + 2 = 5
+## TAGS: ["so-hoc"]
+## ANSWER: Sai
+```
+
+- Giá trị nhận được (không phân biệt hoa thường, có thể có dấu chấm cuối): `Đúng`, `Sai`, `True`, `False`.
+- Có thể viết kèm `Đáp án:` hoặc `Answer:` ở trước, và có thể viết ngay trên dòng `## ANSWER:`.
+- Viết `Đúng` / `Sai` thì 2 phương án là "Đúng" / "Sai"; viết `True` / `False` thì là "True" / "False".
+- Một dòng đáp án khác (ví dụ `Có thể`) → câu bị bỏ qua, kèm cảnh báo.
+- Khi xuất Markdown, câu Đúng/Sai được ghi lại dạng `(x) Đúng` / `( ) Sai` và nhập lại vẫn đúng.
 
 ## 3) Quy tắc validate (để báo lỗi rõ ràng)
 - Pool-level front-matter bắt buộc, nếu pool chưa tồn tại thì **tạo mới** pool cho teacher import.

@@ -16,18 +16,20 @@ vi.mock('next/headers', () => ({ cookies: vi.fn(async () => ({ get: () => undefi
 
 const {
   AuthorizationError,
+  canTeachSession,
   getUserRole,
   requireAttemptAccess,
   requireClassroomOwnership,
   requireQuizOwnership,
   requireSessionAccess,
+  requireSessionOwner,
   requireTeacher,
   requireTeacherInClassroom,
 } = await import('./authz');
 
 const SESSION = { id: 's1', classroomId: 'c1', quiz: { createdByTeacherId: 'owner' } };
 
-function membership(roleInClass: 'teacher' | 'ta' | 'student', status: 'active' | 'left' | 'banned' = 'active') {
+function membership(roleInClass: 'teacher' | 'student', status: 'active' | 'left' | 'banned' = 'active') {
   return { roleInClass, status };
 }
 
@@ -55,8 +57,8 @@ describe('requireSessionAccess', () => {
     expect(r.isQuizOwner).toBe(true);
   });
 
-  it.each(['teacher', 'ta'] as const)('active %s in the classroom is a teacher of the session', async (role) => {
-    db.classMembership.findUnique.mockResolvedValue(membership(role));
+  it('active teacher (owner) of the classroom is a teacher of the session', async () => {
+    db.classMembership.findUnique.mockResolvedValue(membership('teacher'));
 
     await expect(requireSessionAccess('u2', 's1', 'teacher')).resolves.toMatchObject({ userRole: 'teacher' });
   });
@@ -125,14 +127,10 @@ describe('requireAttemptAccess', () => {
 });
 
 describe('requireTeacherInClassroom', () => {
-  it('accepts active teacher and TA', async () => {
+  it('accepts the active teacher of the classroom', async () => {
     db.classMembership.findUnique.mockResolvedValueOnce(membership('teacher'));
 
     await expect(requireTeacherInClassroom('t', 'c1')).resolves.toBeTruthy();
-
-    db.classMembership.findUnique.mockResolvedValueOnce(membership('ta'));
-
-    await expect(requireTeacherInClassroom('ta', 'c1')).resolves.toBeTruthy();
   });
 
   it('rejects students, non-members and inactive teachers', async () => {
@@ -185,5 +183,47 @@ describe('system role', () => {
     db.userRole.findMany.mockResolvedValue([{ role: 'student' }]);
 
     await expectAuthzError(requireTeacher('u'), 'FORBIDDEN');
+  });
+});
+
+describe('session owner / teacher pages', () => {
+  // Phiên thuộc lớp c1 của "owner"
+  const SESSION_WITH_CLASS = { ...SESSION, classroom: { ownerTeacherId: 'owner' } };
+
+  it('requireSessionOwner: only the class owner may cancel / delete a session', async () => {
+    db.quizSession.findUnique.mockResolvedValue(SESSION_WITH_CLASS);
+
+    await expect(requireSessionOwner('owner', 's1')).resolves.toMatchObject({ id: 's1' });
+
+    await expectAuthzError(requireSessionOwner('other-teacher', 's1'), 'FORBIDDEN');
+
+    db.quizSession.findUnique.mockResolvedValue(null);
+
+    await expectAuthzError(requireSessionOwner('owner', 'nope'), 'SESSION_NOT_FOUND', 404);
+  });
+
+  it('canTeachSession: class teacher and quiz owner yes; student, outsider, former teacher no', async () => {
+    db.quizSession.findUnique.mockResolvedValue(SESSION);
+    db.classMembership.findUnique.mockResolvedValue(membership('teacher'));
+
+    await expect(canTeachSession('t', 's1')).resolves.toBe(true);
+
+    db.classMembership.findUnique.mockResolvedValue(null);
+
+    await expect(canTeachSession('owner', 's1')).resolves.toBe(true); // chủ quiz
+
+    await expect(canTeachSession('stranger', 's1')).resolves.toBe(false);
+
+    db.classMembership.findUnique.mockResolvedValue(membership('student'));
+
+    await expect(canTeachSession('stu', 's1')).resolves.toBe(false);
+
+    db.classMembership.findUnique.mockResolvedValue(membership('teacher', 'left'));
+
+    await expect(canTeachSession('old', 's1')).resolves.toBe(false);
+
+    db.quizSession.findUnique.mockResolvedValue(null);
+
+    await expect(canTeachSession('t', 'missing')).resolves.toBe(false);
   });
 });

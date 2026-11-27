@@ -43,12 +43,15 @@ async function getOrCreateDevUserId(role: 'teacher' | 'student') {
   const now = new Date();
   const user = await prisma.user.upsert({
     where: { email },
-    update: { name, updatedAt: now },
+    // Chỉ đặt tên khi tạo lần đầu — trước đây mọi request đều ghi lại tên mặc định (đổi tên ở trang Hồ sơ bị mất
+    // ngay ở request kế tiếp, và tốn 1 lệnh ghi DB mỗi request)
+    update: {},
     create: {
       id: nanoid(),
       email,
       name,
       updatedAt: now,
+      onboardedAt: now, // user dev không phải qua trang chọn vai trò
     },
     select: { id: true },
   });
@@ -155,8 +158,8 @@ export async function requireTeacherInClassroom(userId: string, classroomId: str
   if (!membership || membership.status !== 'active') {
     throw new AuthorizationError('CLASSROOM_FORBIDDEN', 403, 'Classroom access denied');
   }
-  if (membership.roleInClass !== 'teacher' && membership.roleInClass !== 'ta') {
-    throw new AuthorizationError('CLASSROOM_FORBIDDEN', 403, 'Teacher or TA role required in classroom');
+  if (membership.roleInClass !== 'teacher') {
+    throw new AuthorizationError('CLASSROOM_FORBIDDEN', 403, 'Teacher role required in classroom');
   }
   return membership;
 }
@@ -223,7 +226,7 @@ export async function requireClassroomOwnership(userId: string, classroomId: str
 
 /**
  * Require user to have access to the session
- * - Teacher: must own the quiz OR be a teacher/TA in the classroom
+ * - Teacher: must own the quiz OR be the teacher (owner) of the classroom
  * - Student: must be an active member of the classroom
  * Returns the session for convenience
  */
@@ -255,7 +258,7 @@ export async function requireSessionAccess(
   });
 
   const isActiveMember = membership && membership.status === 'active';
-  const isTeacherInClass = isActiveMember && (membership.roleInClass === 'teacher' || membership.roleInClass === 'ta');
+  const isTeacherInClass = isActiveMember && membership.roleInClass === 'teacher';
 
   // Determine user's role for this session
   const userRole = isQuizOwner || isTeacherInClass ? 'teacher' : (isActiveMember ? 'student' : null);
@@ -269,6 +272,40 @@ export async function requireSessionAccess(
   }
 
   return { session, userRole, isQuizOwner, isTeacherInClass };
+}
+
+/**
+ * Chủ lớp của phiên — cho các việc chỉ chủ lớp được làm (huỷ / xoá phiên).
+ * Giáo viên chỉ sở hữu quiz (không phải chủ lớp) bị từ chối.
+ */
+export async function requireSessionOwner(userId: string, sessionId: string) {
+  const session = await prisma.quizSession.findUnique({
+    where: { id: sessionId },
+    select: { id: true, classroomId: true, classroom: { select: { ownerTeacherId: true } } },
+  });
+  if (!session) {
+    throw new AuthorizationError('SESSION_NOT_FOUND', 404, 'Session not found');
+  }
+  if (session.classroom.ownerTeacherId !== userId) {
+    throw new AuthorizationError('FORBIDDEN', 403, 'Only the class owner can do this');
+  }
+  return session;
+}
+
+/**
+ * Trang của giáo viên trong một phiên (màn chiếu, Theo dõi, Thống kê, chi tiết bài làm, câu hỏi):
+ * chủ lớp và chủ quiz vào được. Kiểm tra theo quyền trên phiên, không theo vai trò hệ thống đang chọn.
+ */
+export async function canTeachSession(userId: string, sessionId: string): Promise<boolean> {
+  try {
+    await requireSessionAccess(userId, sessionId, 'teacher');
+    return true;
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /**

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import s from '@/components/chalk/chalk.module.css';
 import { MathRenderer } from '@/components/MathRenderer';
+import { QuestionImage } from '@/components/QuestionImage';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -14,6 +15,7 @@ import { TagInput } from '@/components/ui/TagInput';
 import { Toast } from '@/components/ui/Toast';
 import { generateQuestionMarkdown } from '@/server/export/markdownPool';
 import { cn } from '@/utils/cn';
+import { trueFalseOptions } from '@/utils/trueFalse';
 
 type Pool = {
   id: string;
@@ -30,6 +32,8 @@ type Question = {
   id: string;
   type: 'mcq_single' | 'mcq_multi';
   prompt: string;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
   createdAt: string | Date;
   options: Array<{ order: number; content: string; isCorrect: boolean }>;
   tags: Array<{ name: string; normalizedName: string }>;
@@ -60,7 +64,13 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
 
   // Form state
   const [showAddForm, setShowAddForm] = useState(false);
-  const [qType, setQType] = useState<'mcq_single' | 'mcq_multi'>('mcq_single');
+  // 'true_false' chỉ là mẫu soạn câu: lưu thành mcq_single với 2 phương án Đúng / Sai
+  const [qType, setQType] = useState<'mcq_single' | 'mcq_multi' | 'true_false'>('mcq_single');
+  const [tfAnswer, setTfAnswer] = useState<boolean | null>(null);
+  // Ảnh minh hoạ (Task 6.5): upload qua /api/uploads/question-image, bắt buộc có mô tả
+  const [qImageUrl, setQImageUrl] = useState<string | null>(null);
+  const [qImageAlt, setQImageAlt] = useState('');
+  const [imageBusy, setImageBusy] = useState(false);
   const [qPrompt, setQPrompt] = useState('');
   const [qTags, setQTags] = useState('');
   const [qOptions, setQOptions] = useState<QuestionOption[]>([
@@ -181,17 +191,67 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.poolId]);
 
+  function imageErrorMessage(code: string | undefined, retryAfterSeconds?: number) {
+    switch (code) {
+      case 'FILE_TOO_LARGE':
+        return t('image_too_large');
+      case 'UNSUPPORTED_IMAGE':
+      case 'EMPTY_FILE':
+        return t('image_unsupported');
+      case 'STORAGE_NOT_CONFIGURED':
+        return t('image_storage_missing');
+      case 'RATE_LIMITED':
+        return t('image_rate_limited', { seconds: retryAfterSeconds ?? 60 });
+      default:
+        return t('image_upload_failed');
+    }
+  }
+
+  async function uploadImage(file: File) {
+    setError(null);
+    if (file.size > 2 * 1024 * 1024) {
+      setError(t('image_too_large'));
+      return;
+    }
+    setImageBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/uploads/question-image', { method: 'POST', body: fd });
+      const json = await res.json().catch(() => null) as { url?: string; error?: string; retryAfterSeconds?: number } | null;
+      if (!res.ok || !json?.url) {
+        setError(imageErrorMessage(json?.error, json?.retryAfterSeconds));
+        return;
+      }
+      setQImageUrl(json.url);
+    } catch {
+      setError(t('image_upload_failed'));
+    } finally {
+      setImageBusy(false);
+    }
+  }
+
   async function addQuestion() {
     setBusy(true);
     setError(null);
     try {
-      const validOptions = qOptions.filter(o => o.content.trim());
+      if (qImageUrl && !qImageAlt.trim()) {
+        setError(t('image_alt_required'));
+        return;
+      }
+      if (qType === 'true_false' && tfAnswer === null) {
+        setError(t('tf_pick_answer'));
+        return;
+      }
+      const validOptions = qType === 'true_false'
+        ? trueFalseOptions(tfAnswer === true, [t('tf_true'), t('tf_false')])
+        : qOptions.filter(o => o.content.trim());
       if (validOptions.length < 2) {
         setError(t('need_at_least_2_options'));
         return;
       }
       const correctCount = validOptions.filter(o => o.isCorrect).length;
-      if (qType === 'mcq_single' && correctCount !== 1) {
+      if (qType !== 'mcq_multi' && correctCount !== 1) {
         setError(t('mcq_single_needs_1_correct'));
         return;
       }
@@ -203,10 +263,11 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: qType,
+          type: qType === 'true_false' ? 'mcq_single' : qType,
           prompt: qPrompt.trim(),
           options: validOptions.map(o => ({ content: o.content.trim(), isCorrect: o.isCorrect })),
           tags: qTags.split(',').map(s => s.trim()).filter(Boolean),
+          ...(qImageUrl ? { imageUrl: qImageUrl, imageAlt: qImageAlt.trim() } : {}),
         }),
       });
       const data = await res.json() as { error?: string };
@@ -215,6 +276,9 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
         return;
       }
       // Reset form
+      setTfAnswer(null);
+      setQImageUrl(null);
+      setQImageAlt('');
       setQPrompt('');
       setQTags('');
       setQOptions([
@@ -255,6 +319,8 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
     const markdown = generateQuestionMarkdown({
       type: question.type,
       prompt: question.prompt,
+      imageUrl: question.imageUrl,
+      imageAlt: question.imageAlt,
       options: question.options,
       tags: question.tags.map(t => ({ name: t.name })),
     });
@@ -583,11 +649,11 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                         )
                       : (
                           <>
-                            <h1 className="font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">{pool.name}</h1>
+                            <h1 className="font-chalk text-[1.6rem] leading-tight chalk-glow text-chalk md:text-[2rem]">{pool.name}</h1>
                             <div className="mt-2 flex flex-wrap items-center gap-3 text-base text-chalk-dim">
-                              <Badge variant="neutral">{pool.visibility}</Badge>
+                              <Badge variant="neutral">{t(pool.visibility)}</Badge>
                               {pool.permission && (
-                                <Badge variant="info">{pool.permission}</Badge>
+                                <Badge variant="info">{t(`perm_${pool.permission}`)}</Badge>
                               )}
                               <span>
                                 {pool.questionCount ?? 0}
@@ -797,11 +863,12 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                   <select
                     className={cn(s.field, 'w-auto')}
                     value={qType}
-                    onChange={e => setQType(e.target.value as 'mcq_single' | 'mcq_multi')}
+                    onChange={e => setQType(e.target.value as 'mcq_single' | 'mcq_multi' | 'true_false')}
                     disabled={busy}
                   >
-                    <option value="mcq_single">mcq_single</option>
-                    <option value="mcq_multi">mcq_multi</option>
+                    <option value="mcq_single">{t('type_single')}</option>
+                    <option value="mcq_multi">{t('type_multi')}</option>
+                    <option value="true_false">{t('type_true_false')}</option>
                   </select>
                 </label>
                 <div className="grid gap-1 text-base">
@@ -828,6 +895,82 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
               </label>
 
               <div className="space-y-2">
+                <span className="text-base font-medium text-chalk">{t('image_label')}</span>
+                {qImageUrl
+                  ? (
+                      <div className="space-y-3">
+                        <QuestionImage url={qImageUrl} alt={qImageAlt} size="sm" />
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                          <label className="grid flex-1 gap-1 text-base" htmlFor="q-image-alt">
+                            <span className="text-chalk-dim">{t('image_alt_label')}</span>
+                            <Input
+                              id="q-image-alt"
+                              value={qImageAlt}
+                              onChange={e => setQImageAlt(e.target.value)}
+                              maxLength={300}
+                              placeholder={t('image_alt_placeholder')}
+                              disabled={busy}
+                            />
+                          </label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => {
+                              setQImageUrl(null);
+                              setQImageAlt('');
+                            }}
+                          >
+                            {t('image_remove')}
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  : (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className={cn(s.btn, s.btnSm, (busy || imageBusy) && 'pointer-events-none opacity-60')}>
+                          {imageBusy ? t('image_uploading') : t('image_choose')}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            className="sr-only"
+                            disabled={busy || imageBusy}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = '';
+                              if (file) {
+                                void uploadImage(file);
+                              }
+                            }}
+                          />
+                        </label>
+                        <span className="text-sm text-chalk-dim">{t('image_hint')}</span>
+                      </div>
+                    )}
+              </div>
+
+              {qType === 'true_false' && (
+                <fieldset className="space-y-2">
+                  <legend className="text-base font-medium text-chalk">{t('tf_answer_label')}</legend>
+                  <div className="flex flex-wrap gap-4">
+                    {([true, false] as const).map(value => (
+                      <label key={String(value)} className="flex items-center gap-2 text-base">
+                        <input
+                          type="radio"
+                          name="tf-answer"
+                          checked={tfAnswer === value}
+                          onChange={() => setTfAnswer(value)}
+                          disabled={busy}
+                        />
+                        <span className="text-chalk">{value ? t('tf_true') : t('tf_false')}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-sm text-chalk-dim">{t('tf_hint')}</p>
+                </fieldset>
+              )}
+
+              <div className={cn('space-y-2', qType === 'true_false' && 'hidden')}>
                 <div className="flex items-center justify-between">
                   <span className="text-base font-medium text-chalk">{t('options')}</span>
                   <Button
@@ -945,7 +1088,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                           </span>
                           <span>·</span>
                           <Badge variant="neutral" className="text-sm">
-                            {q.type}
+                            {q.type === 'mcq_multi' ? t('type_multi') : t('type_single')}
                           </Badge>
                           <span>·</span>
                           <span className="text-sm">
@@ -954,6 +1097,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                         </div>
                         <div className="mt-2 text-base text-chalk/85">
                           <MathRenderer content={q.prompt} className="font-sans" />
+                          <QuestionImage url={q.imageUrl} alt={q.imageAlt} size="sm" className="mt-3" />
                         </div>
                         <div className="mt-3 space-y-1">
                           {q.options.map(o => (
@@ -1032,9 +1176,9 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
               className={cn(s.field, 'w-auto')}
               disabled={busy}
             >
-              <option value="view">view</option>
-              <option value="use">use</option>
-              <option value="edit">edit</option>
+              <option value="view">{t('perm_view')}</option>
+              <option value="use">{t('perm_use')}</option>
+              <option value="edit">{t('perm_edit')}</option>
             </select>
           </div>
           <div className="mt-3">
@@ -1063,7 +1207,7 @@ export function QuestionPoolDetail(props: { poolId: string; userId: string | nul
                       </div>
                       <div className="mt-1 text-sm text-chalk-dim">
                         <Badge variant="neutral" className="text-sm">
-                          {s.permission}
+                          {t(`perm_${s.permission}`)}
                         </Badge>
                         <span className="ml-2">
                           {s.sharedWith.email}

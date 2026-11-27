@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAttemptAccess, requireUser } from '@/server/authz';
+import { AuthorizationError, requireAttemptAccess, requireUser } from '@/server/authz';
 import { prisma } from '@/server/prisma';
 import { buildSessionSnapshotIfNeeded } from '@/server/quizSnapshot';
 
@@ -11,7 +11,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ attemptId: string
   try {
     await requireAttemptAccess(userId, attemptId);
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
+    // So theo AuthorizationError.code (message là câu mô tả, không phải mã lỗi)
+    const error = err instanceof AuthorizationError ? err.code : (err instanceof Error ? err.message : String(err));
     if (error === 'ATTEMPT_NOT_FOUND') {
       return NextResponse.json({ error: 'ATTEMPT_NOT_FOUND' }, { status: 404 });
     }
@@ -88,6 +89,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ attemptId: string
       id: true,
       type: true,
       prompt: true,
+      imageUrl: true,
+      imageAlt: true,
       order: true,
       options: {
         orderBy: { order: 'asc' },

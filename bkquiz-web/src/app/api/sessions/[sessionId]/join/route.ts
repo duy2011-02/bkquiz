@@ -3,6 +3,7 @@ import { requireUser } from '@/server/authz';
 import { nextCheckpointDueAt } from '@/server/checkpointPolicy';
 import { prisma } from '@/server/prisma';
 import { buildSessionSnapshotIfNeeded } from '@/server/quizSnapshot';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 function hashToUint32(input: string) {
   let h = 0x811C9DC5;
@@ -35,6 +36,10 @@ function shuffleInPlace<T>(arr: T[], rand: () => number) {
 
 export async function POST(_: Request, ctx: { params: Promise<{ sessionId: string }> }) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('sessionJoin', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   const { sessionId } = await ctx.params;
 
   const session = await prisma.quizSession.findUnique({

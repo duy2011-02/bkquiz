@@ -14,6 +14,7 @@ import { Table, TableWrap } from '@/components/ui/Table';
 import { TagInput } from '@/components/ui/TagInput';
 import { Toast } from '@/components/ui/Toast';
 import { cn } from '@/utils/cn';
+import { duplicateQuiz } from '../duplicateQuiz';
 
 type PoolLite = { id: string; name: string; visibility: 'private' | 'shared'; permission?: 'view' | 'use' | 'edit' };
 type RuleRow = {
@@ -414,6 +415,24 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
     }
   }
 
+  async function handleDuplicate() {
+    if (!quizInfo) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await duplicateQuiz(quizInfo.id, tQuizzes('copy_title', { title: quizInfo.title }));
+      if ('error' in result) {
+        setToast({ message: tQuizzes('duplicate_failed'), type: 'error' });
+        return;
+      }
+      setToast({ message: tQuizzes('duplicate_success'), type: 'success' });
+      router.push(`/dashboard/quizzes/${result.id}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setArchived(archived: boolean) {
     setBusy(true);
     setError(null);
@@ -511,9 +530,9 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
       {/* Quiz Header */}
       {quizInfo && (
         <Card className="p-5 md:p-6">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {editingTitle
                   ? (
                       <form
@@ -541,7 +560,7 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                     )
                   : (
                       <>
-                        <h1 className="truncate font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
+                        <h1 className="min-w-0 font-chalk text-[1.6rem] leading-tight break-words chalk-glow text-chalk md:text-[2rem]">
                           {quizInfo.title}
                         </h1>
                         <button
@@ -585,8 +604,11 @@ export function QuizRulesPanel(props: { quizId: string; userId: string | null })
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Link href="/dashboard/quizzes" className={cn(s.btn, s.btnSm)}>{t('back')}</Link>
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => void handleDuplicate()}>
+                {tQuizzes('duplicate')}
+              </Button>
               {quizInfo.status === 'draft' && (
                 <Button
                   variant="primary"

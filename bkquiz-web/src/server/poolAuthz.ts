@@ -15,7 +15,7 @@ function permissionRank(p: PoolPermission) {
 export async function getPoolPermission(userId: string, poolId: string) {
   const pool = await prisma.questionPool.findUnique({
     where: { id: poolId },
-    select: { id: true, ownerTeacherId: true, name: true, visibility: true },
+    select: { id: true, ownerTeacherId: true, name: true, visibility: true, updatedAt: true },
   });
 
   if (!pool) {

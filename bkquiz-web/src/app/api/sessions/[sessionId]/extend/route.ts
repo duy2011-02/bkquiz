@@ -4,6 +4,7 @@ import { calculateSessionEndTime, MAX_EXTENSION_SECONDS } from '@/server/attempt
 import { requireSessionAccess, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 const BodySchema = z.object({
   minutes: z.number().int().min(1).max(60),
@@ -17,6 +18,10 @@ const BodySchema = z.object({
 export async function POST(req: Request, ctx: { params: Promise<{ sessionId: string }> }) {
   try {
     const { userId } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     const { sessionId } = await ctx.params;
     await requireSessionAccess(userId, sessionId, 'teacher');
 

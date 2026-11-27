@@ -1,11 +1,16 @@
 import type JSZip from 'jszip';
+import type { QuestionImage } from '@/utils/questionImage';
 import matter from 'gray-matter';
 import { z } from 'zod';
+import { extractPromptImage } from '@/utils/questionImage';
+import { parseTrueFalseAnswer, trueFalseOptions } from '@/utils/trueFalse';
 
 export type ImportedQuestion = {
   tags: string[];
   type: 'mcq_single' | 'mcq_multi';
   prompt: string;
+  /** Dòng `![alt](url)` riêng trong đề bài (Task 6.5) */
+  image: QuestionImage | null;
   options: Array<{ content: string; isCorrect: boolean; order: number }>;
 };
 
@@ -38,10 +43,11 @@ const PoolFrontMatterSchema = z.object({
  * Format: Each question block starts with `# QUESTION:`
  */
 function splitQuestionBlocks(markdownAfterPoolHeader: string): string[] {
-  const normalized = markdownAfterPoolHeader.trim();
+  // Thêm "\n" ở đầu để câu đầu tiên (nằm ngay sau front-matter, như file do chức năng xuất Markdown tạo ra)
+  // cũng được tách đúng — trước đây đề bài của câu đầu bị dính chuỗi "# QUESTION:" khi nhập lại file đã xuất.
+  const normalized = `\n${markdownAfterPoolHeader.trim().replace(/\r\n/g, '\n')}`;
 
   // Split by `# QUESTION:` marker (at start of line)
-  // Use regex with multiline flag to match `^# QUESTION:`
   const parts = normalized.split(/\n# QUESTION:\n/).map(s => s.trim()).filter(Boolean);
 
   // Re-add the marker to each block (except first if it doesn't start with it)
@@ -123,14 +129,15 @@ function extractTags(block: string): string[] {
 
 /**
  * Extract options text from question block
- * Format: After `## ANSWER:\n`
+ * Format: After `## ANSWER:` — trên các dòng sau, hoặc ngay cùng dòng (`## ANSWER: Đúng`, câu Đúng/Sai)
  */
 function extractOptionsText(block: string): string {
-  const match = block.match(/## ANSWER:\n([\s\S]*)/);
-  if (match && match[1]) {
-    return match[1].trim();
+  const marker = '## ANSWER:';
+  const idx = block.indexOf(marker);
+  if (idx < 0) {
+    return '';
   }
-  return '';
+  return block.slice(idx + marker.length).trim();
 }
 
 function parseOptions(lines: string[], type: 'mcq_single' | 'mcq_multi') {
@@ -183,8 +190,8 @@ export function parsePoolMarkdown(content: string): ImportedPool {
   const questions: ImportedQuestion[] = [];
 
   for (const block of questionBlocks) {
-    // Extract sections from question block
-    const prompt = extractPrompt(block);
+    // Extract sections from question block (ảnh minh hoạ tách khỏi đề bài)
+    const { prompt, image } = extractPromptImage(extractPrompt(block));
     const tags = extractTags(block);
     const optionsText = extractOptionsText(block);
 
@@ -200,6 +207,19 @@ export function parsePoolMarkdown(content: string): ImportedPool {
 
     // Parse options from text
     const optionsLines = optionsText.split('\n').filter(line => line.trim());
+
+    // Câu Đúng/Sai viết rút gọn: phần đáp án chỉ có 1 dòng "Đúng" / "Sai" / "True" / "False"
+    const trueFalse = optionsLines.length === 1 ? parseTrueFalseAnswer(optionsLines[0]!) : null;
+    if (trueFalse) {
+      questions.push({
+        tags: tags.map(t => t.trim()).filter(Boolean),
+        type: 'mcq_single',
+        prompt: prompt.trim(),
+        image,
+        options: trueFalseOptions(trueFalse.answer, trueFalse.labels),
+      });
+      continue;
+    }
 
     // Auto-detect type from first option format: (x) = single, [x] = multi
     let detectedType: 'mcq_single' | 'mcq_multi' | null = null;
@@ -242,6 +262,7 @@ export function parsePoolMarkdown(content: string): ImportedPool {
       tags: tags.map(t => t.trim()).filter(Boolean),
       type: detectedType,
       prompt: prompt.trim(),
+      image,
       options: parsed.options,
     });
   }

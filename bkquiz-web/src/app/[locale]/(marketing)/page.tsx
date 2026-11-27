@@ -22,7 +22,7 @@ export async function generateMetadata(props: IIndexProps): Promise<Metadata> {
   };
 }
 
-const sectionTitle = cn(s.script, s.chalk, 'text-3xl font-bold');
+const sectionTitle = cn(s.heading, s.chalk, 'text-3xl');
 
 export default async function Index(props: IIndexProps) {
   const { locale } = await props.params;
@@ -85,7 +85,7 @@ export default async function Index(props: IIndexProps) {
       {/* Hero: the lesson of the day, written large on the board */}
       <section className="flex flex-col gap-4 pt-4">
         <p className={s.dim}>{t('hero_eyebrow')}</p>
-        <h1 className={cn(s.script, s.chalk, 'max-w-4xl text-4xl leading-tight font-bold md:text-6xl')}>
+        <h1 className={cn(s.heading, s.chalk, 'max-w-4xl text-4xl leading-tight md:text-6xl')}>
           {t('hero_title')}
         </h1>
         <p className={cn(s.modalText, 'max-w-2xl text-xl')}>

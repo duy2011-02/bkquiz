@@ -72,6 +72,22 @@ describe('calculateAttemptEndTime', () => {
       .toEqual(plus(START, 33));
   });
 
+  it('per-attempt extra time only moves that attempt, also past the common session end', () => {
+    const settings = { durationSeconds: 1800 };
+
+    // Vào đúng giờ: 30 phút + 10 phút riêng
+    expect(calculateAttemptEndTime({ attemptStartedAt: START, extraSeconds: 600, quizSession: session(settings) }))
+      .toEqual(plus(START, 40));
+    // Vào muộn 20 phút: mốc chung 35 phút, cộng 10 phút riêng → 45 phút
+    expect(calculateAttemptEndTime({ attemptStartedAt: plus(START, 20), extraSeconds: 600, quizSession: session(settings) }))
+      .toEqual(plus(START, 45));
+    // Không có / bằng 0 / âm → như cũ
+    expect(calculateAttemptEndTime({ attemptStartedAt: START, extraSeconds: null, quizSession: session(settings) }))
+      .toEqual(plus(START, 30));
+    expect(calculateAttemptEndTime({ attemptStartedAt: START, extraSeconds: -300, quizSession: session(settings) }))
+      .toEqual(plus(START, 30));
+  });
+
   it('teacher extension moves both the attempt and the session end', () => {
     const settings = { durationSeconds: 1800, extensionSeconds: 600 };
 

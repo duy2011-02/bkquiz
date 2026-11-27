@@ -2,7 +2,9 @@ import { nanoid } from 'nanoid';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireTeacher, requireUser } from '@/server/authz';
+import { checkAuthz } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 import { normalizeTagName } from '@/utils/tags';
 
 const CreatePoolSchema = z.object({
@@ -12,7 +14,10 @@ const CreatePoolSchema = z.object({
 
 export async function GET(req: Request) {
   const { userId, devRole } = await requireUser();
-  await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
+  const roleDenied = await checkAuthz(() => requireTeacher(userId, devRole as 'teacher' | 'student' | undefined));
+  if (roleDenied) {
+    return roleDenied;
+  }
 
   const url = new URL(req.url);
   const tagsParam = url.searchParams.get('tags');
@@ -23,7 +28,7 @@ export async function GET(req: Request) {
     : [];
 
   // Build base where clause for owned pools
-  let ownedWhereClause: any = {
+  const ownedWhereClause: any = {
     ownerTeacherId: userId,
   };
 
@@ -98,18 +103,18 @@ export async function GET(req: Request) {
 
   // Get tag counts for each pool
   const ownedWithTags = owned.map((pool) => {
-      return {
+    return {
       id: pool.id,
       name: pool.name,
       visibility: pool.visibility,
       updatedAt: pool.updatedAt,
-        questionCount: pool._count.questions,
+      questionCount: pool._count.questions,
       tags: pool.tags.map((t: any) => t.tag),
-      };
+    };
   });
 
   // Build where clause for shared pools
-  let sharedWhereClause: any = {
+  const sharedWhereClause: any = {
     sharedWithTeacherId: userId,
   };
 
@@ -151,15 +156,15 @@ export async function GET(req: Request) {
   });
 
   const sharedWithTags = shared.map((s) => {
-      return {
+    return {
       id: s.pool.id,
       name: s.pool.name,
       visibility: s.pool.visibility,
       updatedAt: s.pool.updatedAt,
-        permission: s.permission,
-        questionCount: s.pool._count.questions,
+      permission: s.permission,
+      questionCount: s.pool._count.questions,
       tags: s.pool.tags.map((t: any) => t.tag),
-      };
+    };
   });
 
   return NextResponse.json({
@@ -170,7 +175,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const { userId, devRole } = await requireUser();
-  await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
+  const roleDenied = await checkAuthz(() => requireTeacher(userId, devRole as 'teacher' | 'student' | undefined));
+  if (roleDenied) {
+    return roleDenied;
+  }
   const body = CreatePoolSchema.parse(await req.json());
 
   const now = new Date();

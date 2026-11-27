@@ -20,9 +20,23 @@ export function randomInt(min: number, max: number, random: () => number = Math.
   return Math.floor(random() * (max - min + 1)) + min;
 }
 
+/**
+ * Chỉ cho test e2e: `BKQUIZ_CHECKPOINT_SECONDS` rút ngắn khoảng giữa 2 checkpoint.
+ * Chỉ có tác dụng khi `DEV_BYPASS_AUTH=1` (chế độ dev) → không thể bật nhầm trên bản chạy thật.
+ */
+export function checkpointIntervalOverride(env: Record<string, string | undefined> = process.env): number | null {
+  if (env.DEV_BYPASS_AUTH !== '1' || !env.BKQUIZ_CHECKPOINT_SECONDS) {
+    return null;
+  }
+  const seconds = Number(env.BKQUIZ_CHECKPOINT_SECONDS);
+  return Number.isInteger(seconds) && seconds >= 5 && seconds <= CHECKPOINT_MAX_SECONDS ? seconds : null;
+}
+
 /** Mốc checkpoint kế tiếp: sau `now` từ 240 đến 300 giây. */
 export function nextCheckpointDueAt(now: Date, random: () => number = Math.random): Date {
-  return new Date(now.getTime() + randomInt(CHECKPOINT_MIN_SECONDS, CHECKPOINT_MAX_SECONDS, random) * 1000);
+  const override = checkpointIntervalOverride();
+  const seconds = override ?? randomInt(CHECKPOINT_MIN_SECONDS, CHECKPOINT_MAX_SECONDS, random);
+  return new Date(now.getTime() + seconds * 1000);
 }
 
 /** Trạng thái sau một lần nhập token sai. */

@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TagFilter } from '@/components/ui/TagFilter';
+import { Toast } from '@/components/ui/Toast';
 
 type Pool = {
   id: string;
@@ -26,6 +27,7 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
   const [owned, setOwned] = useState<Pool[]>(props.initialOwned);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newPoolName, setNewPoolName] = useState('');
@@ -137,7 +139,7 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
       const raw = await res.text();
       const data = (() => {
         try {
-          return JSON.parse(raw) as { error?: string; warnings?: string[] };
+          return JSON.parse(raw) as { error?: string; warnings?: string[]; importedQuestions?: number; uploadedImages?: number; assetWarnings?: string[] };
         } catch {
           return { error: raw || 'EMPTY_RESPONSE' };
         }
@@ -146,9 +148,16 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
         setError(data.error ?? 'IMPORT_FAILED');
         return;
       }
-      if (data.warnings?.length) {
-        setError(`Imported with warnings: ${data.warnings.slice(0, 3).join(' | ')}`);
+      const warnings = [...(data.warnings ?? []), ...(data.assetWarnings ?? [])];
+      if (warnings.length) {
+        setError(t('import_warnings', { count: warnings.length, list: warnings.slice(0, 3).join(' | ') }));
       }
+      setToast({
+        message: (data.uploadedImages ?? 0) > 0
+          ? t('import_done_with_images', { questions: data.importedQuestions ?? 0, images: data.uploadedImages ?? 0 })
+          : t('import_done', { questions: data.importedQuestions ?? 0 }),
+        type: 'success',
+      });
       setFile(null);
       await refresh();
     } finally {
@@ -429,6 +438,7 @@ export function QuestionBankPanel(props: { initialOwned: Pool[] }) {
                 </div>
               )}
       </Card>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

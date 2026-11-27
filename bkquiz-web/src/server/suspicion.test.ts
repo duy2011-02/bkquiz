@@ -1,0 +1,132 @@
+import type { SuspicionInput } from './suspicion';
+import { describe, expect, it } from 'vitest';
+import { countSharedDeviceAccounts, evaluateFlags, parseDeviceId, THRESHOLDS } from './suspicion';
+
+function input(over: Partial<SuspicionInput> = {}): SuspicionInput {
+  return {
+    tabHiddenCount: 0,
+    tabHiddenMs: 0,
+    blurCount: 0,
+    blurMs: 0,
+    copyCount: 0,
+    pasteCount: 0,
+    deviceCount: 1,
+    sharedDeviceAccounts: 0,
+    tokenFailCount: 0,
+    assignedCount: 10,
+    submitted: null,
+    ...over,
+  };
+}
+const codes = (i: SuspicionInput) => evaluateFlags(i).map(f => f.code);
+
+describe('evaluateFlags', () => {
+  it('a clean attempt has no flags', () => {
+    expect(evaluateFlags(input())).toEqual([]);
+    expect(evaluateFlags(input({ submitted: { durationSeconds: 900, score: 9 } }))).toEqual([]);
+  });
+
+  describe('TAB_AWAY', () => {
+    it('2 short leaves are fine, the 3rd raises a warning', () => {
+      expect(codes(input({ tabHiddenCount: 2, tabHiddenMs: 4000 }))).toEqual([]);
+      expect(evaluateFlags(input({ tabHiddenCount: 2, blurCount: 1, tabHiddenMs: 4000, blurMs: 2000 }))).toEqual([
+        { code: 'TAB_AWAY', severity: 'warn', params: { count: 3, seconds: 6 } },
+      ]);
+    });
+
+    it('one long leave (≥ 60 s) is enough', () => {
+      expect(evaluateFlags(input({ tabHiddenCount: 1, tabHiddenMs: THRESHOLDS.awayMsWarn }))[0]).toMatchObject({ code: 'TAB_AWAY', severity: 'warn' });
+      expect(codes(input({ tabHiddenCount: 1, tabHiddenMs: THRESHOLDS.awayMsWarn - 1 }))).toEqual([]);
+    });
+
+    it('high severity from 10 leaves or 5 minutes away', () => {
+      expect(evaluateFlags(input({ tabHiddenCount: 10, tabHiddenMs: 20_000 }))[0]!.severity).toBe('high');
+      expect(evaluateFlags(input({ blurCount: 1, blurMs: 5 * 60_000 }))[0]!.severity).toBe('high');
+    });
+  });
+
+  describe('FAST_SUBMIT', () => {
+    it('needs both: faster than max(60 s, 10 s × questions) AND score ≥ 80%', () => {
+      // 10 câu → ngưỡng 100 s
+      expect(codes(input({ submitted: { durationSeconds: 99, score: 8 } }))).toEqual(['FAST_SUBMIT']);
+      expect(codes(input({ submitted: { durationSeconds: 100, score: 10 } }))).toEqual([]);
+      expect(codes(input({ submitted: { durationSeconds: 30, score: 7 } }))).toEqual([]); // nhanh nhưng điểm thấp
+    });
+
+    it('uses the 60 s floor for short quizzes', () => {
+      expect(codes(input({ assignedCount: 3, submitted: { durationSeconds: 59, score: 3 } }))).toEqual(['FAST_SUBMIT']);
+      expect(codes(input({ assignedCount: 3, submitted: { durationSeconds: 61, score: 3 } }))).toEqual([]);
+    });
+
+    it('reports duration and percent', () => {
+      expect(evaluateFlags(input({ submitted: { durationSeconds: 42.4, score: 9 } }))[0]!.params).toEqual({ seconds: 42, percent: 90 });
+    });
+
+    it('not evaluated before submission', () => {
+      expect(codes(input({ submitted: null }))).toEqual([]);
+    });
+  });
+
+  it('DEVICE_CHANGED from 2 devices', () => {
+    expect(codes(input({ deviceCount: 2 }))).toEqual(['DEVICE_CHANGED']);
+    expect(codes(input({ deviceCount: 0 }))).toEqual([]); // localStorage bị chặn → không có mã thiết bị
+  });
+
+  it('SHARED_DEVICE is high severity', () => {
+    expect(evaluateFlags(input({ sharedDeviceAccounts: 1 }))).toEqual([
+      { code: 'SHARED_DEVICE', severity: 'high', params: { accounts: 1 } },
+    ]);
+  });
+
+  it('TOKEN_GUESSING from 3 wrong tokens', () => {
+    expect(codes(input({ tokenFailCount: 2 }))).toEqual([]);
+    expect(codes(input({ tokenFailCount: 3 }))).toEqual(['TOKEN_GUESSING']);
+  });
+
+  it('COPY_PASTE only for paste (copy alone is not flagged)', () => {
+    expect(codes(input({ copyCount: 5 }))).toEqual([]);
+    expect(evaluateFlags(input({ copyCount: 2, pasteCount: 1 }))[0]).toMatchObject({ code: 'COPY_PASTE', params: { paste: 1, copy: 2 } });
+  });
+
+  it('high-severity flags come first', () => {
+    expect(codes(input({ tokenFailCount: 4, sharedDeviceAccounts: 1, deviceCount: 2 }))).toEqual(['SHARED_DEVICE', 'DEVICE_CHANGED', 'TOKEN_GUESSING']);
+  });
+});
+
+describe('countSharedDeviceAccounts', () => {
+  it('counts other accounts that used one of the same devices', () => {
+    const m = new Map([
+      ['a1', { userId: 'u1', devices: new Set(['d1']) }],
+      ['a2', { userId: 'u2', devices: new Set(['d2', 'd1']) }], // đổi sang máy của u1
+      ['a3', { userId: 'u3', devices: new Set(['d3']) }],
+    ]);
+    const r = countSharedDeviceAccounts(m);
+
+    expect(r.get('a1')).toBe(1);
+    expect(r.get('a2')).toBe(1);
+    expect(r.get('a3')).toBe(0);
+  });
+
+  it('attempts without a device id are never shared', () => {
+    const r = countSharedDeviceAccounts(new Map([
+      ['a1', { userId: 'u1', devices: new Set<string>() }],
+      ['a2', { userId: 'u2', devices: new Set<string>() }],
+    ]));
+
+    expect([...r.values()]).toEqual([0, 0]);
+  });
+});
+
+describe('parseDeviceId', () => {
+  it('accepts the hex id generated by the client', () => {
+    expect(parseDeviceId('0123456789abcdef0123456789abcdef')).toBe('0123456789abcdef0123456789abcdef');
+  });
+
+  it('rejects missing, too short, too long or odd values', () => {
+    expect(parseDeviceId(null)).toBeNull();
+    expect(parseDeviceId('short')).toBeNull();
+    expect(parseDeviceId('x'.repeat(65))).toBeNull();
+    expect(parseDeviceId('abc def ghi jkl')).toBeNull();
+    expect(parseDeviceId('<script>alert(1)</script>')).toBeNull();
+  });
+});

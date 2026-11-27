@@ -26,6 +26,9 @@ type SidebarProps = {
   collapseSidebar: string;
   expandSidebar: string;
   signOutLabel?: string;
+  /** Quản trị viên (ADMIN_EMAILS): hiện link trang Quản trị (duyệt yêu cầu làm giáo viên) */
+  isAdmin?: boolean;
+  adminLink?: string;
 };
 
 type NavItem = { href: string; label: string; icon: ReactNode; active: boolean };
@@ -166,6 +169,19 @@ export function Sidebar(props: SidebarProps) {
             ),
           },
         ]),
+    ...(props.isAdmin && props.adminLink
+      ? [{
+          href: '/dashboard/admin/',
+          label: props.adminLink,
+          active: isActive('/dashboard/admin'),
+          icon: (
+            <Icon>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="m9 12 2 2 4-4" />
+            </Icon>
+          ),
+        }]
+      : []),
     {
       href: '/dashboard/user-profile/',
       label: props.userProfileLink,

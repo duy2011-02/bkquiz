@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { requireSessionAccess, requireUser } from '@/server/authz';
+import { requireSessionOwner, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 /**
  * Xoá (huỷ) session.
@@ -12,8 +13,13 @@ import { prisma } from '@/server/prisma';
 export async function DELETE(_: Request, ctx: { params: Promise<{ sessionId: string }> }) {
   try {
     const { userId } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     const { sessionId } = await ctx.params;
-    await requireSessionAccess(userId, sessionId, 'teacher');
+    // Huỷ / xoá phiên: chỉ chủ lớp (xem bảng quyền trong docs/security.md)
+    await requireSessionOwner(userId, sessionId);
 
     const session = await prisma.quizSession.findUnique({
       where: { id: sessionId },

@@ -7,6 +7,7 @@ import s from '@/components/chalk/chalk.module.css';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/utils/cn';
+import { formatGrade } from '@/utils/formatGrade';
 
 type SessionsListProps = {
   sessions: Session[];
@@ -143,14 +144,18 @@ export function SessionsList(props: SessionsListProps) {
                     </div>
                   </div>
                   {/* Score display for ended sessions with attempt - centered */}
-                  {s.status === 'ended' && s.attempt && s.attempt.score !== null && (
+                  {s.status === 'ended' && s.attempt && s.attempt.grade !== null && s.attempt.grade !== undefined && (
                     <div className="flex items-center gap-2 rounded-hand border border-chalk-yellow/30 bg-chalk-yellow/10 px-4 py-2">
                       <div className="text-base font-medium text-chalk-dim">
                         {t('score')}
                       </div>
                       <div className="text-2xl font-bold text-chalk-yellow tabular-nums">
-                        {s.attempt.score.toFixed(1)}
+                        {formatGrade(s.attempt.grade)}
+                        <span className="text-base font-medium text-chalk-dim">/10</span>
                       </div>
+                      {s.attempt.correctCount !== null && s.attempt.correctCount !== undefined && s.attempt.totalQuestions
+                        ? <div className="text-sm text-chalk-dim">{t('correct_count', { correct: s.attempt.correctCount, total: s.attempt.totalQuestions })}</div>
+                        : null}
                     </div>
                   )}
                   <div className="flex shrink-0 items-center gap-3">

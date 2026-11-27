@@ -1,3 +1,5 @@
+> **Lỗi thời (25/11/2026):** bảng màu charcoal + cam trong tài liệu này đã được thay bằng hệ thiết kế bảng đen – phấn màu. Xem `docs/uiux/guidelines.md`.
+
 Rất tốt, **ảnh này là đủ để “giải phẫu” màu sắc & design tokens của Framer.money** ở mức **design-system learning (không copy, không vi phạm)** 👍
 Mình sẽ làm theo 4 bước, rất thực tế và chuyên nghiệp:
 

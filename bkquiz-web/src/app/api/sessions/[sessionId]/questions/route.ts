@@ -22,6 +22,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
       order: true,
       type: true,
       prompt: true,
+      imageUrl: true,
+      imageAlt: true,
       sourceQuestionId: true,
       options: {
         orderBy: { order: 'asc' },
@@ -47,6 +49,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
         order: q.order,
         type: q.type,
         prompt: q.prompt,
+        imageUrl: q.imageUrl,
+        imageAlt: q.imageAlt,
         sourceQuestionId: q.sourceQuestionId,
         options: q.options,
         tag: q.tag || undefined, // Convert null to undefined

@@ -1,10 +1,11 @@
+import { nanoid } from 'nanoid';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { nanoid } from 'nanoid';
 import { requireUser } from '@/server/authz';
 import { parsePoolMarkdown } from '@/server/import/markdownPool';
 import { requirePoolPermission } from '@/server/poolAuthz';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 import { normalizeTagName } from '@/utils/tags';
 
 const UpdateQuestionFromMarkdownSchema = z.object({
@@ -13,6 +14,10 @@ const UpdateQuestionFromMarkdownSchema = z.object({
 
 export async function DELETE(_: Request, ctx: { params: Promise<{ questionId: string }> }) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   const { questionId } = await ctx.params;
 
   // Get question to find poolId
@@ -43,6 +48,10 @@ export async function DELETE(_: Request, ctx: { params: Promise<{ questionId: st
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ questionId: string }> }) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   const { questionId } = await ctx.params;
   const body = UpdateQuestionFromMarkdownSchema.parse(await req.json());
 
@@ -101,6 +110,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ questionId: s
       data: {
         type: imported.type,
         prompt: imported.prompt,
+        // Không có dòng ảnh trong Markdown → bỏ ảnh
+        imageUrl: imported.image?.url ?? null,
+        imageAlt: imported.image ? imported.image.alt : null,
       },
     });
 

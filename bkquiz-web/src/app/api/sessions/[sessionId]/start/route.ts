@@ -3,10 +3,15 @@ import { requireSessionAccess, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
 import { buildSessionSnapshotIfNeeded } from '@/server/quizSnapshot';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 export async function POST(_: Request, ctx: { params: Promise<{ sessionId: string }> }) {
   try {
     const { userId } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     const { sessionId } = await ctx.params;
     await requireSessionAccess(userId, sessionId, 'teacher');
 

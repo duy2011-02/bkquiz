@@ -1,6 +1,7 @@
 import type { ResolvedScoring, ScorableOption } from './scoring';
 import { describe, expect, it } from 'vitest';
 import {
+  attemptResult,
   computeAllOrNothing,
   computeByHalves,
   computeEDC,
@@ -10,6 +11,7 @@ import {
   roundScore,
   scoreAttempt,
   scoreQuestion,
+  toTenPointScale,
 } from './scoring';
 
 const ALL_OR_NOTHING = resolveScoringSettings({ mode: 'all_or_nothing' });
@@ -214,5 +216,28 @@ describe('scoreAttempt', () => {
       totalQuestions: 0,
       questionScores: {},
     });
+  });
+});
+
+describe('toTenPointScale / attemptResult', () => {
+  it('maps raw points onto a 10-point scale whatever the question count', () => {
+    expect(toTenPointScale(5, 5)).toBe(10); // 5 câu: mỗi câu 2 điểm
+    expect(toTenPointScale(3, 5)).toBe(6);
+    expect(toTenPointScale(20, 20)).toBe(10); // 20 câu: tối đa vẫn 10, không phải 20
+    expect(toTenPointScale(15, 20)).toBe(7.5);
+    expect(toTenPointScale(1, 3)).toBe(3.33);
+    expect(toTenPointScale(2.5, 4)).toBe(6.25); // điểm từng phần
+  });
+
+  it('never leaves [0, 10]; no questions → 0', () => {
+    expect(toTenPointScale(0, 0)).toBe(0);
+    expect(toTenPointScale(-1, 5)).toBe(0);
+    expect(toTenPointScale(6, 5)).toBe(10);
+  });
+
+  it('attemptResult: grade only when the attempt was scored', () => {
+    expect(attemptResult({ score: 4, correctCount: 4, totalQuestions: 5 })).toEqual({ grade: 8, correctCount: 4, totalQuestions: 5 });
+    expect(attemptResult({ score: null, correctCount: null, totalQuestions: null }).grade).toBeNull();
+    expect(attemptResult({ score: 4, correctCount: null, totalQuestions: null }).grade).toBeNull();
   });
 });

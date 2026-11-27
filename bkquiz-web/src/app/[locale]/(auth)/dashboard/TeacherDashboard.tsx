@@ -111,7 +111,7 @@ export async function TeacherDashboard(props: TeacherDashboardProps) {
       <header className={s.header}>
         <div className="min-w-0">
           <p className={s.dim}>{t('header_subtitle')}</p>
-          <h1 className={cn(s.title, s.script, s.chalk)}>{t('header_title')}</h1>
+          <h1 className={cn(s.title, s.chalk)}>{t('header_title')}</h1>
           <p className={cn(s.meta, s.dim, 'mt-1')}>{t('header_description')}</p>
         </div>
         <div className={s.actionsGroup}>
@@ -138,7 +138,7 @@ export async function TeacherDashboard(props: TeacherDashboardProps) {
             <Card interactive className="h-full p-5">
               <div className={s.dim}>{k.label}</div>
               <div className="mt-1 flex items-baseline gap-3">
-                <span className={cn(s.script, s.chalk, 'text-5xl leading-none font-bold')}>{k.value}</span>
+                <span className={cn(s.num, s.chalk, 'text-5xl leading-none font-bold')}>{k.value}</span>
                 {k.tag}
               </div>
               <p className={cn(s.dim, 'mt-2')}>{k.desc}</p>
@@ -228,16 +228,16 @@ export async function TeacherDashboard(props: TeacherDashboardProps) {
           <div className="grid gap-3 sm:grid-cols-3">
             <Card className="px-4 py-3">
               <div className={s.dim}>{t('draft')}</div>
-              <div className={cn(s.script, s.chalk, 'text-4xl font-bold')}>{draftQuizzes}</div>
+              <div className={cn(s.num, s.chalk, 'text-4xl font-bold')}>{draftQuizzes}</div>
             </Card>
             <Card className="px-4 py-3">
               <div className={s.dim}>{t('published')}</div>
-              <div className={cn(s.script, s.green, 'text-4xl font-bold')}>{publishedQuizzes}</div>
+              <div className={cn(s.num, s.green, 'text-4xl font-bold')}>{publishedQuizzes}</div>
             </Card>
             {quizzesWithoutRules > 0 && (
               <Card variant="note" className={cn(s.yellow, 'px-4 py-3')}>
                 <div>{t('no_rules')}</div>
-                <div className={cn(s.script, 'text-4xl font-bold')}>{quizzesWithoutRules}</div>
+                <div className={cn(s.num, 'text-4xl font-bold')}>{quizzesWithoutRules}</div>
               </Card>
             )}
           </div>

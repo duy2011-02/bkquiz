@@ -24,6 +24,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ poolId: string }>
         select: {
           type: true,
           prompt: true,
+          imageUrl: true,
+          imageAlt: true,
           options: {
             where: { deletedAt: null },
             orderBy: { order: 'asc' },
@@ -58,6 +60,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ poolId: string }>
     questions: pool.questions.map((q) => ({
       type: q.type,
       prompt: q.prompt,
+      imageUrl: q.imageUrl,
+      imageAlt: q.imageAlt,
       options: q.options,
       tags: q.tags.map(t => t.tag),
     })),

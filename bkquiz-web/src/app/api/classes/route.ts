@@ -2,7 +2,9 @@ import { nanoid } from 'nanoid';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireTeacher, requireUser } from '@/server/authz';
+import { checkAuthz } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 import { generateClassCode } from '@/utils/classCode';
 import { normalizeTagName } from '@/utils/tags';
 
@@ -21,7 +23,7 @@ export async function GET(_req: Request) {
     : [];
 
   // Build base where clause
-  let whereClause: any = {
+  const whereClause: any = {
     userId,
     status: 'active',
   };
@@ -83,6 +85,7 @@ export async function GET(_req: Request) {
           name: true,
           classCode: true,
           createdAt: true,
+          archivedAt: true,
           ownerTeacherId: true,
           _count: {
             select: {
@@ -111,6 +114,7 @@ export async function GET(_req: Request) {
       name: m.classroom.name,
       classCode: m.classroom.classCode,
       createdAt: m.classroom.createdAt,
+      archivedAt: m.classroom.archivedAt,
       ownerTeacherId: m.classroom.ownerTeacherId,
       roleInClass: m.roleInClass,
       joinedAt: m.joinedAt,
@@ -122,7 +126,14 @@ export async function GET(_req: Request) {
 
 export async function POST(req: Request) {
   const { userId, devRole } = await requireUser();
-  await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
+  const roleDenied = await checkAuthz(() => requireTeacher(userId, devRole as 'teacher' | 'student' | undefined));
+  if (roleDenied) {
+    return roleDenied;
+  }
   const body = CreateClassSchema.parse(await req.json());
 
   // Best effort unique classCode (low collision).

@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getUserRole, requireQuizOwnership, requireTeacherInClassroom, requireUser } from '@/server/authz';
+import { getUserRole, requireClassroomOwnership, requireQuizOwnership, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
 import { buildSessionSnapshotIfNeeded } from '@/server/quizSnapshot';
+import { enforceRateLimit } from '@/server/rateLimit';
+import { attemptResult } from '@/server/scoring';
 import { generateTotpSecret } from '@/server/totp';
 
 const CreateSessionSchema = z.object({
@@ -145,6 +147,8 @@ export async function GET(_req: Request) {
       status: true,
       submittedAt: true,
       score: true,
+      correctCount: true,
+      totalQuestions: true,
       createdAt: true,
     },
   });
@@ -167,6 +171,7 @@ export async function GET(_req: Request) {
               status: attemptMap.get(s.id)!.status,
               submittedAt: attemptMap.get(s.id)!.submittedAt,
               score: attemptMap.get(s.id)!.score,
+              ...attemptResult(attemptMap.get(s.id)!),
               createdAt: attemptMap.get(s.id)!.createdAt,
             }
           : undefined,
@@ -182,10 +187,20 @@ export async function GET(_req: Request) {
 export async function POST(req: Request) {
   try {
     const { userId } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     const body = CreateSessionSchema.parse(await req.json());
 
-    // Check teacher có trong classroom
-    await requireTeacherInClassroom(userId, body.classroomId);
+    // Tạo phiên: chỉ chủ lớp (xem bảng quyền trong docs/security.md)
+    await requireClassroomOwnership(userId, body.classroomId);
+
+    // Lớp đã lưu trữ không tạo phiên mới
+    const classroom = await prisma.classroom.findUnique({ where: { id: body.classroomId }, select: { archivedAt: true } });
+    if (classroom?.archivedAt) {
+      return NextResponse.json({ error: 'CLASS_ARCHIVED' }, { status: 409 });
+    }
 
     // Check quiz tồn tại và teacher sở hữu quiz
     await requireQuizOwnership(userId, body.quizId);

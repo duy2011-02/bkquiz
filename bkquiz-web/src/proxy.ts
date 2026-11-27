@@ -19,7 +19,10 @@ function isProtectedPathname(pathname: string) {
   return pathname === '/dashboard'
     || pathname.startsWith('/dashboard/')
     || pathname.endsWith('/dashboard')
-    || pathname.includes('/dashboard/');
+    || pathname.includes('/dashboard/')
+    // Trang chọn vai trò ở lần đăng nhập đầu (Đợt 7)
+    || pathname === '/onboarding'
+    || pathname.endsWith('/onboarding');
 }
 
 function buildSignInUrl(req: NextRequest) {

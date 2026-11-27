@@ -7,7 +7,7 @@ import { QuizzesPanel } from './QuizzesPanel';
 
 type ClassroomRow = {
   classroom: { id: string; name: string; classCode: string };
-  roleInClass: 'student' | 'ta' | 'teacher';
+  roleInClass: 'student' | 'teacher';
 };
 
 export async function generateMetadata(props: {

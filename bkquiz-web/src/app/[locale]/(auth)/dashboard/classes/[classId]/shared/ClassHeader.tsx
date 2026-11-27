@@ -46,15 +46,16 @@ export function ClassHeader(props: ClassHeaderProps) {
         isOwner ? 'border-chalk-yellow/20' : 'border-chalk-blue/20'
       }`}
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="min-w-0 font-chalk text-[1.6rem] leading-tight chalk-glow text-chalk md:text-[2rem]">
               {classInfo.name}
             </h1>
-            <Badge variant={isOwner ? 'success' : (classInfo.userRole === 'ta' ? 'info' : 'neutral')}>
-              {isOwner ? t('role_owner') : (classInfo.userRole === 'ta' ? t('role_ta') : t('role_student'))}
+            <Badge variant={isOwner ? 'success' : 'neutral'}>
+              {isOwner ? t('role_owner') : t('role_student')}
             </Badge>
+            {classInfo.archivedAt ? <Badge variant="neutral">{tClasses('archived_badge')}</Badge> : null}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-base text-chalk-dim">
             <span>
@@ -79,7 +80,7 @@ export function ClassHeader(props: ClassHeaderProps) {
             {classInfo.ownerTeacher.name ?? classInfo.ownerTeacher.email ?? 'N/A'}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isOwner && (
             <Button
               variant="ghost"
@@ -104,6 +105,14 @@ export function ClassHeader(props: ClassHeaderProps) {
         </div>
       </div>
 
+      {classInfo.archivedAt
+        ? (
+            <div className="mt-4 rounded-hand border border-chalk-yellow/40 bg-chalk-yellow/10 p-3 text-base text-chalk-yellow">
+              {isOwner ? t('archived_note_teacher') : t('archived_note_student')}
+            </div>
+          )
+        : null}
+
       {/* QR Code Modal - Full Screen giống Teacher Screen */}
       {/* Projector view of the class code: full chalkboard, like the teacher screen */}
       {showQRCode && (
@@ -119,7 +128,7 @@ export function ClassHeader(props: ClassHeaderProps) {
           >
             <header className={s.header}>
               <div className="min-w-0">
-                <h2 className={cn(s.title, s.script, s.chalk)}>{t('qr_modal_title')}</h2>
+                <h2 className={cn(s.title, s.chalk)}>{t('qr_modal_title')}</h2>
                 <p className={cn(s.meta, s.dim)}>{classInfo.name}</p>
               </div>
             </header>

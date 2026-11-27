@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
-import { getUserRole, requireUser } from '@/server/authz';
+import { canTeachSession, requireUser } from '@/server/authz';
 import { AttemptDetailView } from './AttemptDetailView';
 
 export async function generateMetadata(props: {
@@ -15,10 +15,9 @@ export async function generateMetadata(props: {
 export default async function AttemptDetailPage(props: {
   params: Promise<{ sessionId: string; attemptId: string }>;
 }) {
-  const { userId, devRole } = await requireUser();
-  const role = await getUserRole(userId, devRole as 'teacher' | 'student' | undefined);
-
-  if (role !== 'teacher') {
+  const { userId } = await requireUser();
+  // Chủ lớp hoặc chủ quiz của phiên (kiểm tra theo quyền trên phiên, không theo vai trò hệ thống)
+  if (!(await canTeachSession(userId, (await props.params).sessionId))) {
     redirect('/dashboard');
   }
 

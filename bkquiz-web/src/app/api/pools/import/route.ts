@@ -2,8 +2,12 @@ import JSZip from 'jszip';
 import { nanoid } from 'nanoid';
 import { NextResponse } from 'next/server';
 import { requireTeacher, requireUser } from '@/server/authz';
+import { checkAuthz } from '@/server/authzHelpers';
 import { extractQuestionsMdFromZip, parsePoolMarkdown } from '@/server/import/markdownPool';
+import { collectAssetRefs, questionsMdPath, rewriteAssetRefs, uploadZipAssets } from '@/server/import/zipAssets';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
+import { storageConfig } from '@/server/storage';
 import { normalizeTagName } from '@/utils/tags';
 
 export const runtime = 'nodejs';
@@ -12,7 +16,14 @@ export const maxDuration = 10; // Vercel Hobby limit: 10 seconds
 export async function POST(req: Request) {
   try {
     const { userId, devRole } = await requireUser();
-    await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
+    const limited = await enforceRateLimit('poolImport', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
+    const roleDenied = await checkAuthz(() => requireTeacher(userId, devRole as 'teacher' | 'student' | undefined));
+    if (roleDenied) {
+      return roleDenied;
+    }
     const form = await req.formData();
     const file = form.get('file');
 
@@ -22,11 +33,26 @@ export async function POST(req: Request) {
 
     const filename = file.name.toLowerCase();
     let md: string;
+    // Ảnh trong file .zip (thư mục assets/): tải lên kho ảnh rồi thay đường dẫn tương đối bằng URL công khai
+    let uploadedImages = 0;
+    const assetWarnings: string[] = [];
 
     if (filename.endsWith('.zip')) {
       const buf = await file.arrayBuffer();
       const zip = await JSZip.loadAsync(buf);
       md = await extractQuestionsMdFromZip(zip);
+      const refs = collectAssetRefs(md.replace(/\r\n/g, '\n'));
+      if (refs.length > 0) {
+        const config = storageConfig();
+        if (!config) {
+          assetWarnings.push('Chưa cấu hình kho ảnh (S3_*): ảnh trong file zip không được tải lên.');
+        } else {
+          const result = await uploadZipAssets(zip, refs, { userId, config, mdPath: questionsMdPath(zip) });
+          md = rewriteAssetRefs(md.replace(/\r\n/g, '\n'), result.map);
+          uploadedImages = result.map.size;
+          assetWarnings.push(...result.warnings);
+        }
+      }
     } else if (filename.endsWith('.md')) {
       md = await file.text();
     } else {
@@ -143,6 +169,8 @@ export async function POST(req: Request) {
             poolId: pool.id,
             type: q.type,
             prompt: q.prompt,
+            imageUrl: q.image?.url ?? null,
+            imageAlt: q.image ? q.image.alt : null,
             createdByTeacherId: userId,
             updatedAt: new Date(),
             options: {
@@ -200,6 +228,9 @@ export async function POST(req: Request) {
       importedQuestions,
       skippedQuestions: parsed.warnings.length,
       warnings: parsed.warnings,
+      uploadedImages,
+      // Cảnh báo về ảnh tách riêng để `skippedQuestions` vẫn là số câu bị bỏ qua
+      assetWarnings,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/utils/cn';
+import { formatGrade } from '@/utils/formatGrade';
 
 type Session = {
   id: string;
@@ -24,6 +25,10 @@ type Session = {
     status: string;
     submittedAt: string | null;
     score: number | null;
+    /** Điểm thang 10 */
+    grade?: number | null;
+    correctCount?: number | null;
+    totalQuestions?: number | null;
     createdAt: string;
   };
   attemptCount?: number;
@@ -150,7 +155,7 @@ export function SessionsPanel() {
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="text-base text-chalk-dim">{t('bkquiz_sessions')}</div>
-            <h1 className="mt-1 font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
+            <h1 className="mt-1 font-chalk text-[1.6rem] leading-tight chalk-glow text-chalk md:text-[2rem]">
               {t('title')}
             </h1>
             <div className="mt-2 text-base text-chalk-dim">
@@ -434,14 +439,18 @@ export function SessionsPanel() {
                               </div>
                             </div>
                             {/* Score display for ended sessions with attempt - centered */}
-                            {session.attempt && session.attempt.score !== null && (
+                            {session.attempt && session.attempt.grade !== null && session.attempt.grade !== undefined && (
                               <div className="flex items-center gap-2 rounded-hand border border-chalk-yellow/30 bg-chalk-yellow/10 px-4 py-2">
                                 <div className="text-base font-medium text-chalk-dim">
                                   {t('score')}
                                 </div>
                                 <div className="text-2xl font-bold text-chalk-yellow tabular-nums">
-                                  {session.attempt.score.toFixed(1)}
+                                  {formatGrade(session.attempt.grade)}
+                                  <span className="text-base font-medium text-chalk-dim">/10</span>
                                 </div>
+                                {session.attempt.correctCount !== null && session.attempt.correctCount !== undefined && session.attempt.totalQuestions
+                                  ? <div className="text-sm text-chalk-dim">{t('correct_count', { correct: session.attempt.correctCount, total: session.attempt.totalQuestions })}</div>
+                                  : null}
                               </div>
                             )}
                             <div className="flex shrink-0 items-center gap-3">

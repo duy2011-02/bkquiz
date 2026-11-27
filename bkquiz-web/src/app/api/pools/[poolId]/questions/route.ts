@@ -1,9 +1,11 @@
+import { nanoid } from 'nanoid';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { nanoid } from 'nanoid';
 import { requireUser } from '@/server/authz';
 import { requirePoolPermission } from '@/server/poolAuthz';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
+import { IMAGE_ALT_MAX, isAllowedImageUrl } from '@/utils/questionImage';
 import { normalizeTagName } from '@/utils/tags';
 
 type QuestionTagRow = { tag: { name: string; normalizedName: string } };
@@ -12,6 +14,8 @@ type QuestionListRow = {
   id: string;
   type: 'mcq_single' | 'mcq_multi';
   prompt: string;
+  imageUrl: string | null;
+  imageAlt: string | null;
   createdAt: Date;
   options: QuestionOptionRow[];
   tags: QuestionTagRow[];
@@ -25,7 +29,10 @@ const CreateQuestionSchema = z.object({
     isCorrect: z.boolean().optional(),
   })).min(2).max(12),
   tags: z.array(z.string().trim().min(1)).max(20).optional(),
-});
+  /** Ảnh minh hoạ (URL từ `uploads/question-image` hoặc URL http(s) công khai); có ảnh thì bắt buộc mô tả */
+  imageUrl: z.string().trim().refine(isAllowedImageUrl, 'INVALID_IMAGE_URL').optional(),
+  imageAlt: z.string().trim().max(IMAGE_ALT_MAX).optional(),
+}).refine(b => !b.imageUrl || !!b.imageAlt, { message: 'IMAGE_ALT_REQUIRED', path: ['imageAlt'] });
 
 export async function GET(_: Request, ctx: { params: Promise<{ poolId: string }> }) {
   const { userId } = await requireUser();
@@ -40,6 +47,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ poolId: string }>
       id: true,
       type: true,
       prompt: true,
+      imageUrl: true,
+      imageAlt: true,
       createdAt: true,
       options: { where: { deletedAt: null }, orderBy: { order: 'asc' }, select: { order: true, content: true, isCorrect: true } },
       tags: { select: { tag: { select: { name: true, normalizedName: true } } } },
@@ -58,8 +67,17 @@ export async function GET(_: Request, ctx: { params: Promise<{ poolId: string }>
 
 export async function POST(req: Request, ctx: { params: Promise<{ poolId: string }> }) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   const { poolId } = await ctx.params;
-  const body = CreateQuestionSchema.parse(await req.json());
+  const parsed = CreateQuestionSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    // Trước đây parse() ném lỗi ra ngoài → 500; dữ liệu sai (kể cả ảnh thiếu mô tả / URL không hợp lệ) phải là 400
+    return NextResponse.json({ error: 'INVALID_INPUT', details: parsed.error.issues }, { status: 400 });
+  }
+  const body = parsed.data;
 
   await requirePoolPermission(userId, poolId, 'edit');
 
@@ -77,6 +95,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ poolId: string
       poolId,
       type: body.type,
       prompt: body.prompt,
+      imageUrl: body.imageUrl ?? null,
+      imageAlt: body.imageUrl ? body.imageAlt : null,
       createdByTeacherId: userId,
       updatedAt: new Date(),
       options: {

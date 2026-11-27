@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
-import { getUserRole, requireUser } from '@/server/authz';
+import { requireUser } from '@/server/authz';
 import { prisma } from '@/server/prisma';
 import { StudentClassDetail } from './StudentClassDetail';
 import { TeacherClassDetail } from './TeacherClassDetail';
@@ -18,13 +18,12 @@ export default async function ClassDetailPage(props: {
 }) {
   const { locale, classId } = await props.params;
   const t = await getTranslations({ locale, namespace: 'Classes' });
-  const { userId, devRole } = await requireUser();
-  const role = await getUserRole(userId, devRole as 'teacher' | 'student' | undefined);
+  const { userId } = await requireUser();
 
   // Verify user has access to this classroom
   const membership = await prisma.classMembership.findUnique({
     where: { classroomId_userId: { classroomId: classId, userId } },
-    select: { status: true },
+    select: { status: true, roleInClass: true },
   });
 
   if (!membership || membership.status !== 'active') {
@@ -37,7 +36,8 @@ export default async function ClassDetailPage(props: {
     );
   }
 
-  if (role === 'teacher') {
+  // Giao diện theo vai trò trong lớp: chủ lớp dùng giao diện giáo viên, thành viên còn lại là sinh viên
+  if (membership.roleInClass === 'teacher') {
     return (
       <div className="py-5">
         <TeacherClassDetail classId={classId} />

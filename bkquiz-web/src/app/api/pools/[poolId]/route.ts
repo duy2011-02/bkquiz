@@ -4,6 +4,7 @@ import { requirePoolOwnership, requireTeacher, requireUser } from '@/server/auth
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { requirePoolPermission } from '@/server/poolAuthz';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 const UpdatePoolSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
@@ -37,6 +38,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ poolId: string }>
     id: pool.id,
     name: pool.name,
     visibility: pool.visibility,
+    updatedAt: pool.updatedAt,
     ownerTeacherId: pool.ownerTeacherId,
     permission,
     questionCount,
@@ -46,6 +48,10 @@ export async function GET(_: Request, ctx: { params: Promise<{ poolId: string }>
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ poolId: string }> }) {
   const { userId, devRole } = await requireUser();
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
   const { poolId } = await ctx.params;
   const body = UpdatePoolSchema.parse(await req.json());
@@ -71,6 +77,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ poolId: strin
 export async function DELETE(_: Request, ctx: { params: Promise<{ poolId: string }> }) {
   try {
     const { userId, devRole } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
     const { poolId } = await ctx.params;
     await requirePoolOwnership(userId, poolId);

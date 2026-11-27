@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAttemptAccess, requireUser } from '@/server/authz';
+import { AuthorizationError, requireAttemptAccess, requireUser } from '@/server/authz';
 import { applyFailedVerify, isAttemptLocked, isInCooldown, nextCheckpointDueAt } from '@/server/checkpointPolicy';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 import { verifyTotp } from '@/server/totp';
 
 const VerifySchema = z.object({
@@ -11,13 +12,18 @@ const VerifySchema = z.object({
 
 export async function POST(req: Request, ctx: { params: Promise<{ attemptId: string }> }) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('verifyToken', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   const { attemptId } = await ctx.params;
   const body = VerifySchema.parse(await req.json());
 
   try {
     await requireAttemptAccess(userId, attemptId);
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
+    // So theo AuthorizationError.code (message là câu mô tả, không phải mã lỗi)
+    const error = err instanceof AuthorizationError ? err.code : (err instanceof Error ? err.message : String(err));
     if (error === 'ATTEMPT_NOT_FOUND') {
       return NextResponse.json({ error: 'ATTEMPT_NOT_FOUND' }, { status: 404 });
     }

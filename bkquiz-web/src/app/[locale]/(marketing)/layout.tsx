@@ -27,7 +27,7 @@ export default async function Layout(props: {
           </li>
           <li>
             <Link href="/dashboard/" className={s.navLink}>
-              Dashboard
+              {t('dashboard_link')}
             </Link>
           </li>
         </>

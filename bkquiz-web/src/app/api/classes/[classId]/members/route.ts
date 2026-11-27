@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireClassroomOwnership, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 const AddMemberSchema = z.object({
   email: z.string().trim().email(),
@@ -25,7 +26,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ classId: string }
   const members = await prisma.classMembership.findMany({
     where: { classroomId: classId, status: 'active' },
     orderBy: [
-      { roleInClass: 'asc' }, // teacher, ta, student
+      { roleInClass: 'asc' }, // theo thứ tự enum: student, teacher
       { joinedAt: 'asc' },
     ],
     select: {
@@ -60,9 +61,18 @@ export async function GET(_: Request, ctx: { params: Promise<{ classId: string }
 export async function POST(req: Request, ctx: { params: Promise<{ classId: string }> }) {
   try {
     const { userId } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     const { classId } = await ctx.params;
     const body = AddMemberSchema.parse(await req.json());
     await requireClassroomOwnership(userId, classId);
+
+    const classroom = await prisma.classroom.findUnique({ where: { id: classId }, select: { archivedAt: true } });
+    if (classroom?.archivedAt) {
+      return NextResponse.json({ error: 'CLASS_ARCHIVED' }, { status: 409 });
+    }
 
     const user = await prisma.user.findFirst({
       where: { email: { equals: body.email, mode: 'insensitive' } },

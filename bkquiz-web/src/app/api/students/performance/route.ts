@@ -1,20 +1,29 @@
 import { NextResponse } from 'next/server';
 import { requireStudent, requireUser } from '@/server/authz';
+import { checkAuthz } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { attemptResult } from '@/server/scoring';
 
+/** Thống kê kết quả của sinh viên. Mọi điểm trả về đều ở thang 10 (`grade`), kèm số câu đúng / tổng số câu. */
 export async function GET() {
   const { userId, devRole } = await requireUser();
-  await requireStudent(userId, devRole as 'teacher' | 'student' | undefined);
+  const roleDenied = await checkAuthz(() => requireStudent(userId, devRole as 'teacher' | 'student' | undefined));
+  if (roleDenied) {
+    return roleDenied;
+  }
 
   const attempts = await prisma.attempt.findMany({
     where: {
       userId,
       status: 'submitted',
       score: { not: null },
+      totalQuestions: { gt: 0 },
     },
     select: {
       id: true,
       score: true,
+      correctCount: true,
+      totalQuestions: true,
       submittedAt: true,
       quizSession: {
         select: {
@@ -39,24 +48,24 @@ export async function GET() {
     });
   }
 
-  const scores = attempts.map(a => a.score!).filter((s): s is number => s !== null);
-  const averageScore = scores.length > 0
-    ? scores.reduce((sum, s) => sum + s, 0) / scores.length
-    : null;
-  const highestScore = scores.length > 0 ? Math.max(...scores) : null;
+  const results = attempts.map(a => ({ a, r: attemptResult(a) }));
+  const grades = results.map(x => x.r.grade).filter((g): g is number => g !== null);
+  const averageScore = grades.length > 0 ? grades.reduce((sum, g) => sum + g, 0) / grades.length : null;
+  const highestScore = grades.length > 0 ? Math.max(...grades) : null;
 
-  const recentAttempts = attempts.slice(0, 5).map(a => ({
+  const recentAttempts = results.slice(0, 5).map(({ a, r }) => ({
     id: a.id,
-    score: a.score,
+    grade: r.grade,
+    correctCount: r.correctCount,
+    totalQuestions: r.totalQuestions,
     submittedAt: a.submittedAt,
     quizTitle: a.quizSession.quiz.title,
   }));
 
   return NextResponse.json({
     totalAttempts: attempts.length,
-    averageScore: averageScore ? Number(averageScore.toFixed(2)) : null,
-    highestScore: highestScore ? Number(highestScore.toFixed(2)) : null,
+    averageScore: averageScore !== null ? Number(averageScore.toFixed(2)) : null,
+    highestScore: highestScore !== null ? Number(highestScore.toFixed(2)) : null,
     recentAttempts,
   });
 }
-

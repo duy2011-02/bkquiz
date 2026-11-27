@@ -55,15 +55,37 @@ model Attempt {
   submittedAt      DateTime?
   score            Float?
   questionScores   Json? // Cache điểm từng câu { questionId: score }
+  correctCount     Int? // Số câu đúng hoàn toàn (ghi khi nộp bài)
+  totalQuestions   Int? // Số câu được giao = điểm tối đa (mỗi câu 1 điểm); điểm hệ 10 = score / totalQuestions × 10
+  lastSeenAt       DateTime? // Lần cuối client gọi state/answers (ghi tối đa 10 s/lần) — trang giám sát
+  extraSeconds     Int               @default(0) // Gia hạn riêng cho bài này (giáo viên, trang giám sát)
+  deviceId         String? // Mã thiết bị (ngẫu nhiên, localStorage) đầu tiên làm bài — gắn cờ đổi / dùng chung thiết bị
   answers          Answer[]
   quizSession      QuizSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   attemptQuestions AttemptQuestion[]
   checkpointLogs   CheckpointLog[]
+  events           AttemptEvent[]
 
   @@unique([sessionId, userId])
   @@index([sessionId])
   @@index([userId])
+}
+
+/// Hành vi khi làm bài (rời tab, chuyển cửa sổ, copy/paste, đổi thiết bị) — chỉ ghi nhận, giáo viên tự đánh giá.
+/// Không lưu nội dung copy/paste. Cờ nghi vấn được tính khi đọc (src/server/suspicion.ts).
+model AttemptEvent {
+  id         String           @id @default(cuid())
+  attemptId  String
+  type       AttemptEventType
+  at         DateTime // thời điểm phía client, đã kẹp trong khoảng làm bài
+  durationMs Int? // thời gian rời trang (tab_hidden / window_blur)
+  deviceId   String? // chỉ với device_changed: mã thiết bị mới
+  createdAt  DateTime         @default(now())
+  attempt    Attempt          @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, type, deviceId]) // mỗi thiết bị mới chỉ ghi 1 lần (NULL không trùng nhau)
+  @@index([attemptId, at])
 }
 
 model AttemptQuestion {
@@ -112,6 +134,7 @@ model Classroom {
   ownerTeacherId String
   createdAt      DateTime          @default(now())
   updatedAt      DateTime
+  archivedAt     DateTime? // Lưu trữ (lớp đã kết thúc): không tạo phiên, không tham gia / thêm thành viên; vẫn xem được kết quả
   memberships    ClassMembership[]
   ownerTeacher   User              @relation(fields: [ownerTeacherId], references: [id])
   sessions       QuizSession[]
@@ -137,6 +160,8 @@ model Question {
   poolId             String
   type               QuestionType
   prompt             String
+  imageUrl           String? // Ảnh minh hoạ (URL công khai: MinIO / Supabase Storage / URL ngoài)
+  imageAlt           String? // Mô tả ảnh cho trình đọc màn hình
   createdByTeacherId String
   createdAt          DateTime      @default(now())
   updatedAt          DateTime
@@ -276,6 +301,16 @@ model QuizSession {
   @@index([quizId])
 }
 
+/// Bộ đếm rate limit theo cửa sổ cố định (src/server/rateLimit.ts). Key = <nhóm>:<user|ip>:<id>.
+model RateLimit {
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+}
+
 model Session {
   id           String   @id @default(cuid())
   sessionToken String   @unique
@@ -318,6 +353,8 @@ model SessionQuestionSnapshot {
   tagId            String?
   type             QuestionType
   prompt           String
+  imageUrl         String? // Chép từ Question lúc tạo đề — sửa ảnh trong ngân hàng không đổi đề đã thi
+  imageAlt         String?
   order            Int
   createdAt        DateTime                @default(now())
   answers          Answer[]
@@ -348,23 +385,50 @@ model Tag {
 }
 
 model User {
-  id            String              @id @default(cuid())
-  name          String?
-  email         String?             @unique
-  emailVerified DateTime?
-  image         String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  accounts      Account[]
-  attempts      Attempt[]
-  memberships   ClassMembership[]
+  id              String              @id @default(cuid())
+  name            String?
+  email           String?             @unique
+  emailVerified   DateTime?
+  image           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  accounts        Account[]
+  attempts        Attempt[]
+  memberships     ClassMembership[]
   ownedClassrooms Classroom[]
-  questions     Question[]
-  questionPools QuestionPool[]
-  poolShares    QuestionPoolShare[]
-  quizzes       Quiz[]
-  sessions      Session[]
-  roles         UserRole[]
+  questions       Question[]
+  questionPools   QuestionPool[]
+  poolShares      QuestionPoolShare[]
+  quizzes         Quiz[]
+  sessions        Session[]
+  roles           UserRole[]
+  /// Đã chọn vai trò ở lần đăng nhập đầu (trang /onboarding). NULL → dashboard chuyển sang trang chọn vai trò.
+  onboardedAt     DateTime?
+  teacherRequest  TeacherRequest?
+}
+
+enum TeacherRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+/// Yêu cầu làm giáo viên (Đợt 7): quản trị viên (ADMIN_EMAILS) duyệt thì user được thêm UserRole teacher.
+/// Mỗi người 1 yêu cầu; gửi lại = cập nhật bản ghi và đưa về pending.
+model TeacherRequest {
+  id           String               @id @default(cuid())
+  userId       String               @unique
+  organization String
+  note         String?
+  status       TeacherRequestStatus @default(pending)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewNote   String?
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
 }
 
 model UserRole {
@@ -383,6 +447,14 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+enum AttemptEventType {
+  tab_hidden
+  window_blur
+  copy
+  paste
+  device_changed
+}
+
 enum AttemptStatus {
   active
   submitted
@@ -394,11 +466,14 @@ enum CheckpointEventType {
   verify_ok
   verify_fail
   locked
+  teacher_unlock
+  teacher_extend
+  teacher_submit
 }
 
+// Vai trò trong lớp: chủ lớp (teacher) và sinh viên. Vai trò trợ giảng (ta) đã gỡ ở Đợt 7.
 enum ClassroomRole {
   student
-  ta
   teacher
 }
 

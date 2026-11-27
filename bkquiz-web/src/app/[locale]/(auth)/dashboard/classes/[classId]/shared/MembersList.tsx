@@ -46,9 +46,9 @@ export function MembersList(props: MembersListProps) {
               className="rounded-hand border border-chalk-faint bg-white/2 transition-all duration-200 hover:border-chalk-yellow/30"
               style={{ animationDelay: `${idx * 30}ms` }}
             >
-              <div className="flex items-center justify-between gap-4 px-4 py-3">
-                <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_auto_auto] items-center gap-4 md:grid-cols-[2fr_auto_120px_100px]">
-                  <div className="min-w-0">
+              <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between md:gap-4">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 md:grid md:grid-cols-[2fr_auto_120px_100px] md:gap-4">
+                  <div className="min-w-0 basis-full md:basis-auto">
                     <div className="truncate text-base font-medium text-chalk">
                       {m.user.name ?? m.user.email ?? 'N/A'}
                     </div>
@@ -57,21 +57,21 @@ export function MembersList(props: MembersListProps) {
                     </div>
                   </div>
                   <Badge
-                    variant={m.roleInClass === 'teacher' ? 'success' : (m.roleInClass === 'ta' ? 'info' : 'neutral')}
+                    variant={m.roleInClass === 'teacher' ? 'success' : 'neutral'}
                     className="text-sm"
                   >
-                    {m.roleInClass === 'teacher' ? t('role_teacher') : (m.roleInClass === 'ta' ? t('role_ta') : t('role_student'))}
+                    {m.roleInClass === 'teacher' ? t('role_teacher') : t('role_student')}
                   </Badge>
                   <div className="text-sm text-chalk-dim">
                     <span className="font-mono">{formatDate(m.joinedAt, locale)}</span>
                   </div>
-                  <div className="text-sm text-chalk-dim">
+                  <div className="hidden text-sm text-chalk-dim md:block">
                     <span>-</span>
                   </div>
                 </div>
                 {isOwner && onRemoveMember && m.userId !== ownerTeacherId
                   ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button variant="ghost" size="sm" disabled={busy} onClick={() => onRemoveMember(m, false)}>
                           {t('remove_member')}
                         </Button>
@@ -87,7 +87,7 @@ export function MembersList(props: MembersListProps) {
                       </div>
                     )
                   : (
-                      <div className="flex items-center gap-2">
+                      <div className="hidden items-center gap-2 md:flex">
                         <span className="text-sm text-chalk-dim">→</span>
                       </div>
                     )}

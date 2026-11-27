@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { formatGrade } from '@/utils/formatGrade';
 
 type PerformanceData = {
   totalAttempts: number;
@@ -13,7 +14,10 @@ type PerformanceData = {
   highestScore: number | null;
   recentAttempts: Array<{
     id: string;
-    score: number | null;
+    /** Điểm thang 10 */
+    grade: number | null;
+    correctCount: number | null;
+    totalQuestions: number | null;
     submittedAt: string | null;
     quizTitle: string;
   }>;
@@ -98,7 +102,7 @@ export function PerformancePanel() {
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="text-base text-chalk-blue">{t('title')}</div>
-            <h1 className="mt-1 font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
+            <h1 className="mt-1 font-chalk text-[1.6rem] leading-tight chalk-glow text-chalk md:text-[2rem]">
               {t('subtitle')}
             </h1>
             <div className="mt-2 text-base text-chalk-dim">
@@ -171,15 +175,22 @@ export function PerformancePanel() {
                       {' '}
                       {formatDate(attempt.submittedAt)}
                     </div>
+                    {attempt.correctCount !== null && attempt.totalQuestions
+                      ? (
+                          <div className="mt-1 text-sm text-chalk-dim">
+                            {t('correct_count', { correct: attempt.correctCount, total: attempt.totalQuestions })}
+                          </div>
+                        )
+                      : null}
                   </div>
                   <div className="flex items-center gap-3">
-                    {attempt.score !== null
+                    {attempt.grade !== null
                       ? (
                           <Badge
-                            variant={attempt.score >= 8 ? 'success' : (attempt.score >= 5 ? 'info' : 'neutral')}
+                            variant={attempt.grade >= 8 ? 'success' : (attempt.grade >= 5 ? 'info' : 'neutral')}
                             className="text-sm"
                           >
-                            {attempt.score.toFixed(1)}
+                            {formatGrade(attempt.grade)}
                             {' '}
                             / 10
                           </Badge>

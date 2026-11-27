@@ -3,6 +3,7 @@ import {
   applyFailedVerify,
   CHECKPOINT_MAX_SECONDS,
   CHECKPOINT_MIN_SECONDS,
+  checkpointIntervalOverride,
   COOLDOWN_SECONDS,
   getCheckpointPhase,
   GRACE_SECONDS_BEFORE_BLOCK,
@@ -101,5 +102,19 @@ describe('getCheckpointPhase', () => {
   it('grace period over → due (student is blocked)', () => {
     expect(getCheckpointPhase(due, at(GRACE_SECONDS_BEFORE_BLOCK))).toEqual({ warning: false, due: true });
     expect(getCheckpointPhase(due, at(120))).toEqual({ warning: false, due: true });
+  });
+});
+
+describe('checkpointIntervalOverride (e2e only)', () => {
+  it('ignored unless DEV_BYPASS_AUTH=1', () => {
+    expect(checkpointIntervalOverride({ BKQUIZ_CHECKPOINT_SECONDS: '10' })).toBeNull();
+    expect(checkpointIntervalOverride({ DEV_BYPASS_AUTH: '0', BKQUIZ_CHECKPOINT_SECONDS: '10' })).toBeNull();
+  });
+
+  it('accepts 5..300 s in dev mode', () => {
+    expect(checkpointIntervalOverride({ DEV_BYPASS_AUTH: '1', BKQUIZ_CHECKPOINT_SECONDS: '10' })).toBe(10);
+    expect(checkpointIntervalOverride({ DEV_BYPASS_AUTH: '1', BKQUIZ_CHECKPOINT_SECONDS: '2' })).toBeNull();
+    expect(checkpointIntervalOverride({ DEV_BYPASS_AUTH: '1', BKQUIZ_CHECKPOINT_SECONDS: 'abc' })).toBeNull();
+    expect(checkpointIntervalOverride({ DEV_BYPASS_AUTH: '1' })).toBeNull();
   });
 });

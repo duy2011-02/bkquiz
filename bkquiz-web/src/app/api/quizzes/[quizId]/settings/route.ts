@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireQuizOwnership, requireTeacher, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 type VariantSettings = {
   defaultExtraPercent?: number;
@@ -80,6 +81,10 @@ export async function GET(_: Request, ctx: { params: Promise<{ quizId: string }>
 export async function PATCH(req: Request, ctx: { params: Promise<{ quizId: string }> }) {
   try {
     const { userId, devRole } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
     const { quizId } = await ctx.params;
     const body = PatchSettingsSchema.parse(await req.json());

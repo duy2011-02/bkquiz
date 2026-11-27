@@ -1,4 +1,5 @@
-import { requireUser } from '@/server/authz';
+import { redirect } from 'next/navigation';
+import { canTeachSession, requireUser } from '@/server/authz';
 import { TeacherScreen } from './teacherScreen';
 
 export default async function TeacherScreenPage(props: {
@@ -6,6 +7,10 @@ export default async function TeacherScreenPage(props: {
 }) {
   const { userId } = await requireUser();
   const { sessionId } = await props.params;
+  // Chủ lớp hoặc chủ quiz của phiên
+  if (!(await canTeachSession(userId, sessionId))) {
+    redirect('/dashboard');
+  }
 
   return (
     <div className="py-5">

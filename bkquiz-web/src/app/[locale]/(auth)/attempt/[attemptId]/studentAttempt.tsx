@@ -6,11 +6,15 @@ import { useEffect, useRef, useState } from 'react';
 import shared from '@/components/chalk/chalk.module.css';
 import { ChalkRoom } from '@/components/chalk/ChalkRoom';
 import { MathRenderer } from '@/components/MathRenderer';
+import { QuestionImage } from '@/components/QuestionImage';
 import { Modal } from '@/components/ui/Modal';
 import { cn } from '@/utils/cn';
+import { deviceHeaders } from '@/utils/deviceId';
+import { formatGrade, questionPointsOnTenScale } from '@/utils/formatGrade';
 import { getI18nPath } from '@/utils/Helpers';
 import { idbGet, idbSet } from '@/utils/idb';
 import local from './chalkboard.module.css';
+import { useAttemptProctoring } from './useAttemptProctoring';
 
 // Shared chalkboard system + the parts only this page uses (question, options, navigator)
 const styles = { ...shared, ...local };
@@ -33,12 +37,18 @@ type AttemptState = {
   inCooldown: boolean;
   isLocked: boolean;
   score?: number | null;
+  /** Điểm thang 10 */
+  grade?: number | null;
+  correctCount?: number | null;
+  totalQuestions?: number | null;
 };
 
 type SnapshotQuestion = {
   id: string;
   type: 'mcq_single' | 'mcq_multi';
   prompt: string;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
   order: number;
   options: Array<{ order: number; content: string; isCorrect?: boolean }>;
   studentSelected?: number[];
@@ -141,7 +151,7 @@ export function AttemptClient(props: { attemptId: string }) {
     for (const [sessionQuestionId, a] of dirtyEntries) {
       const ok = await fetch(`/api/attempts/${props.attemptId}/answers`, {
         method: 'PUT',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...deviceHeaders() },
         body: JSON.stringify({ sessionQuestionId, selected: a.selected }),
       }).then(r => r.ok).catch(() => false);
       if (ok) {
@@ -249,7 +259,7 @@ export function AttemptClient(props: { attemptId: string }) {
     try {
       const res = await fetch(`/api/attempts/${props.attemptId}/answers`, {
         method: 'PUT',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...deviceHeaders() },
         body: JSON.stringify({
           sessionQuestionId: current.id,
           selected: currentSelected,
@@ -305,7 +315,7 @@ export function AttemptClient(props: { attemptId: string }) {
         setError('SUBMIT_FAILED');
         return;
       }
-      let json: { ok?: boolean; error?: string; correctCount?: number; totalQuestions?: number; score?: number };
+      let json: { ok?: boolean; error?: string; retryAfterSeconds?: number; correctCount?: number; totalQuestions?: number; score?: number; grade?: number | null };
       try {
         json = JSON.parse(text);
       } catch {
@@ -313,11 +323,11 @@ export function AttemptClient(props: { attemptId: string }) {
         return;
       }
       if (!res.ok || !json.ok) {
-        setError(json.error ?? t('submit_failed'));
+        setError(json.error === 'RATE_LIMITED' ? t('rate_limited', { seconds: json.retryAfterSeconds ?? 60 }) : (json.error ?? t('submit_failed')));
         return;
       }
       setError(t('submit_success', {
-        score: json.score ?? 0,
+        score: formatGrade(json.grade ?? 0),
         correctCount: json.correctCount ?? 0,
         totalQuestions: json.totalQuestions ?? 0,
       }));
@@ -336,7 +346,7 @@ export function AttemptClient(props: { attemptId: string }) {
         setError('START_FAILED');
         return;
       }
-      let json: { ok?: boolean; attemptStartedAt?: string; error?: string };
+      let json: { ok?: boolean; attemptStartedAt?: string; error?: string; retryAfterSeconds?: number };
       try {
         json = JSON.parse(text);
       } catch {
@@ -344,7 +354,7 @@ export function AttemptClient(props: { attemptId: string }) {
         return;
       }
       if (!res.ok || !json.ok) {
-        setError(json.error ?? 'START_FAILED');
+        setError(json.error === 'RATE_LIMITED' ? t('rate_limited', { seconds: json.retryAfterSeconds ?? 60 }) : (json.error ?? 'START_FAILED'));
         return;
       }
       // Reload state để lấy time limit info
@@ -355,7 +365,7 @@ export function AttemptClient(props: { attemptId: string }) {
   }
 
   async function load() {
-    const res = await fetch(`/api/attempts/${props.attemptId}/state`, { method: 'GET' });
+    const res = await fetch(`/api/attempts/${props.attemptId}/state`, { method: 'GET', headers: deviceHeaders() });
     const text = await res.text();
     if (!text || text.trim().length === 0) {
       setError('ATTEMPT_NOT_FOUND');
@@ -526,7 +536,7 @@ export function AttemptClient(props: { attemptId: string }) {
     void loadAnswers().catch(() => setIsOnline(false));
     // Auto-start attempt nếu session đã active và chưa start
     void (async () => {
-      const stateRes = await fetch(`/api/attempts/${props.attemptId}/state`, { method: 'GET' });
+      const stateRes = await fetch(`/api/attempts/${props.attemptId}/state`, { method: 'GET', headers: deviceHeaders() });
       if (stateRes.ok) {
         const text = await stateRes.text();
         if (text && text.trim().length > 0) {
@@ -597,7 +607,7 @@ export function AttemptClient(props: { attemptId: string }) {
         setError('WRONG_TOKEN');
         return;
       }
-      let json: { error?: string; ok?: boolean };
+      let json: { error?: string; ok?: boolean; retryAfterSeconds?: number };
       try {
         json = JSON.parse(text);
       } catch {
@@ -605,7 +615,7 @@ export function AttemptClient(props: { attemptId: string }) {
         return;
       }
       if (!res.ok || !json.ok) {
-        setError(json.error ?? 'WRONG_TOKEN');
+        setError(json.error === 'RATE_LIMITED' ? t('rate_limited', { seconds: json.retryAfterSeconds ?? 60 }) : (json.error ?? 'WRONG_TOKEN'));
         return;
       }
       setToken('');
@@ -614,6 +624,12 @@ export function AttemptClient(props: { attemptId: string }) {
       setBusy(false);
     }
   }
+
+  // Gắn cờ nghi vấn (Task 5.4): chỉ ghi nhận khi đang làm bài trong phiên đang chạy
+  useAttemptProctoring(
+    props.attemptId,
+    !!state && state.status !== 'submitted' && !!state.attemptStartedAt && state.session.status === 'active',
+  );
 
   const exitButton = (
     <Link href={getI18nPath('/dashboard', locale)} className={cn(styles.btn, styles.ledgeBtn)}>
@@ -627,7 +643,7 @@ export function AttemptClient(props: { attemptId: string }) {
     return (
       <ChalkRoom lockViewport ledge={exitButton}>
         <div className={styles.questionArea}>
-          <h1 className={cn(styles.title, styles.script, styles.chalk)}>{t('error_title')}</h1>
+          <h1 className={cn(styles.title, styles.chalk)}>{t('error_title')}</h1>
           <div className={cn(styles.note, styles.pink)}>{error}</div>
         </div>
       </ChalkRoom>
@@ -637,7 +653,7 @@ export function AttemptClient(props: { attemptId: string }) {
   if (!state) {
     return (
       <ChalkRoom lockViewport>
-        <div className={cn(styles.title, styles.script, styles.chalk)}>{t('loading')}</div>
+        <div className={cn(styles.title, styles.chalk)}>{t('loading')}</div>
       </ChalkRoom>
     );
   }
@@ -676,7 +692,7 @@ export function AttemptClient(props: { attemptId: string }) {
         {/* Header: title, status, timer */}
         <header className={styles.header}>
           <div className="min-w-0 flex-1">
-            <h1 className={cn(styles.title, styles.script, styles.chalk)}>
+            <h1 className={cn(styles.title, styles.chalk)}>
               {state.session.sessionName || state.session.quiz.title}
             </h1>
             <div className={cn(styles.meta, styles.dim, 'mt-1')}>
@@ -733,20 +749,22 @@ export function AttemptClient(props: { attemptId: string }) {
             {/* Lobby: waiting for teacher */}
             {isWaitingInLobby && (
               <div className={cn(styles.note, styles.yellow)}>
-                <div className={cn(styles.script)} style={{ fontSize: '1.8rem' }}>{t('waiting_for_teacher')}</div>
+                <div className={cn(styles.heading)} style={{ fontSize: '1.8rem' }}>{t('waiting_for_teacher')}</div>
                 <div className={cn(styles.dim, 'mt-1')}>{t('can_review_questions_hint')}</div>
               </div>
             )}
 
             {/* Score after submit */}
-            {state.status === 'submitted' && state.score !== null && state.score !== undefined && (
+            {state.status === 'submitted' && state.grade !== null && state.grade !== undefined && (
               <div className={cn(styles.plainNote, canReview ? styles.green : styles.yellow, 'flex flex-wrap items-baseline gap-x-4 gap-y-1')}>
-                <span className={cn(styles.scoreBig, styles.script)}>
-                  {state.score.toFixed(1)}
-                  {' / '}
-                  {questions.length}
+                <span className={cn(styles.scoreBig)}>
+                  {formatGrade(state.grade)}
+                  {' / 10'}
                 </span>
                 <span className={styles.chalk}>{canReview ? t('completed') : t('your_score')}</span>
+                {state.correctCount !== null && state.correctCount !== undefined && state.totalQuestions
+                  ? <span className={styles.dim}>{t('correct_count', { correct: state.correctCount, total: state.totalQuestions })}</span>
+                  : null}
               </div>
             )}
 
@@ -780,7 +798,7 @@ export function AttemptClient(props: { attemptId: string }) {
                   <>
                     <div key={q.id} className={styles.questionEnter}>
                       <div className={styles.questionLabel}>
-                        <span className={cn(styles.questionNumber, styles.script, styles.chalk)}>
+                        <span className={cn(styles.questionNumber, styles.chalk)}>
                           {t('question')}
                           {' '}
                           {idx + 1}
@@ -799,15 +817,17 @@ export function AttemptClient(props: { attemptId: string }) {
                           <span className={styles.yellow}>
                             {t('score')}
                             {' '}
-                            {q.questionScore.toFixed(2)}
-                            {' / 1.00'}
+                            {formatGrade(questionPointsOnTenScale(q.questionScore, state.totalQuestions || questions.length))}
+                            {' / '}
+                            {formatGrade(questionPointsOnTenScale(1, state.totalQuestions || questions.length))}
                           </span>
                         )}
                       </div>
 
-                      <div className={cn(styles.prompt, styles.script, styles.chalk)}>
+                      <div className={cn(styles.prompt)}>
                         <MathRenderer content={q.prompt} />
                       </div>
+                      <QuestionImage url={q.imageUrl} alt={q.imageAlt} className="mb-5" />
 
                       <div className={styles.options}>
                         {q.options.map((o) => {
@@ -823,7 +843,7 @@ export function AttemptClient(props: { attemptId: string }) {
                           return (
                             <label
                               key={o.order}
-                              aria-label={`option:${o.order}`}
+                              data-order={o.order}
                               className={cn(
                                 styles.option,
                                 (canReview || isDisabled) && styles.optionDisabled,
@@ -872,8 +892,6 @@ export function AttemptClient(props: { attemptId: string }) {
                               <span
                                 className={cn(
                                   styles.optionContent,
-                                  styles.script,
-                                  styles.chalk,
                                   isWrongAnswer && styles.wrongText,
                                 )}
                               >

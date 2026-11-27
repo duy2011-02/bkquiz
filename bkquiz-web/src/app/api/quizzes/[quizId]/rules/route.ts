@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireQuizOwnership, requireTeacher, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 import { normalizeTagName } from '@/utils/tags';
 
 const UpsertRuleSchema = z.object({
@@ -49,6 +50,10 @@ export async function GET(_: Request, ctx: { params: Promise<{ quizId: string }>
 export async function POST(req: Request, ctx: { params: Promise<{ quizId: string }> }) {
   try {
     const { userId, devRole } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
     const { quizId } = await ctx.params;
     const body = UpsertRuleSchema.parse(await req.json());
@@ -148,6 +153,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ quizId: string
 export async function DELETE(req: Request, ctx: { params: Promise<{ quizId: string }> }) {
   try {
     const { userId, devRole } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
     const { quizId } = await ctx.params;
     const url = new URL(req.url);
@@ -159,9 +168,13 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ quizId: stri
 
     await requireQuizOwnership(userId, quizId);
 
-    await prisma.quizRule.delete({
-      where: { id: ruleId },
+    // Luật phải thuộc đúng quiz đã kiểm tra quyền (trước đây xoá theo ruleId bất kỳ → xoá được luật của quiz người khác)
+    const deleted = await prisma.quizRule.deleteMany({
+      where: { id: ruleId, quizId },
     });
+    if (deleted.count === 0) {
+      return NextResponse.json({ error: 'RULE_NOT_FOUND' }, { status: 404 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -2,7 +2,7 @@ import { prisma } from '@/server/prisma';
 
 type RuleFilters = { poolIds?: string[] };
 type SnapshotSourceOption = { content: string; isCorrect: boolean; order: number };
-type SnapshotSourceQuestion = { id: string; type: 'mcq_single' | 'mcq_multi'; prompt: string; options: SnapshotSourceOption[] };
+type SnapshotSourceQuestion = { id: string; type: 'mcq_single' | 'mcq_multi'; prompt: string; imageUrl: string | null; imageAlt: string | null; options: SnapshotSourceOption[] };
 type VariantSettings = { defaultExtraPercent?: number; perTagExtraPercent?: Record<string, number> };
 type QuizSettings = { variant?: VariantSettings };
 
@@ -142,6 +142,8 @@ export async function buildSessionSnapshotIfNeeded(sessionId: string) {
       id: true,
       type: true,
       prompt: true,
+      imageUrl: true,
+      imageAlt: true,
       options: { where: { deletedAt: null }, orderBy: { order: 'asc' }, select: { content: true, isCorrect: true, order: true } },
     },
   });
@@ -161,6 +163,9 @@ export async function buildSessionSnapshotIfNeeded(sessionId: string) {
           tagId: null,
           type: q.type,
           prompt: q.prompt,
+          // Chép ảnh vào đề của phiên: sửa / xoá ảnh trong ngân hàng không làm đổi đề đã tạo
+          imageUrl: q.imageUrl,
+          imageAlt: q.imageAlt,
           order,
           options: {
             create: q.options.map(o => ({

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/server/authz';
 import { prisma } from '@/server/prisma';
+import { attemptResult } from '@/server/scoring';
 
 export async function GET(_: Request, ctx: { params: Promise<{ classId: string }> }) {
   const { userId } = await requireUser();
@@ -55,6 +56,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ classId: string }
       id: true,
       sessionId: true,
       score: true,
+      correctCount: true,
+      totalQuestions: true,
       submittedAt: true,
       status: true,
     },
@@ -85,6 +88,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ classId: string }
           ? {
               id: userAttempt.id,
               score: userAttempt.score,
+              ...attemptResult(userAttempt),
               submittedAt: userAttempt.submittedAt,
               status: userAttempt.status,
             }

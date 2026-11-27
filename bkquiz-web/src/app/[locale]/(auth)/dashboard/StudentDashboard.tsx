@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { prisma } from '@/server/prisma';
+import { toTenPointScale } from '@/server/scoring';
 import { cn } from '@/utils/cn';
 
 type StudentDashboardProps = {
@@ -21,6 +22,12 @@ export async function StudentDashboard(props: StudentDashboardProps) {
   const t = await getTranslations({
     locale,
     namespace: 'Dashboard.student',
+  });
+
+  // Yêu cầu làm giáo viên đang chờ / bị từ chối → ghi chú trên đầu trang (Đợt 7)
+  const teacherRequest = await prisma.teacherRequest.findUnique({
+    where: { userId },
+    select: { status: true, reviewNote: true },
   });
 
   // Fetch active sessions (priority display)
@@ -80,15 +87,18 @@ export async function StudentDashboard(props: StudentDashboardProps) {
       userId,
       status: 'submitted',
       score: { not: null },
+      totalQuestions: { gt: 0 },
     },
     orderBy: { submittedAt: 'desc' },
     take: 10,
     select: {
       score: true,
+      totalQuestions: true,
     },
   });
 
-  const scores = performanceData.map(a => a.score!).filter((s): s is number => s !== null);
+  // Điểm thang 10 (mỗi bài quy đổi theo số câu của bài đó)
+  const scores = performanceData.map(a => toTenPointScale(a.score!, a.totalQuestions!));
   const averageScore = scores.length > 0
     ? scores.reduce((sum, s) => sum + s, 0) / scores.length
     : null;
@@ -117,7 +127,7 @@ export async function StudentDashboard(props: StudentDashboardProps) {
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="text-base text-chalk-blue">{t('header_subtitle')}</div>
-            <h1 className="mt-1 font-script text-2xl leading-tight font-bold chalk-glow text-chalk md:text-[1.85rem]">
+            <h1 className="mt-1 font-chalk text-[1.6rem] leading-tight chalk-glow text-chalk md:text-[2rem]">
               {t('header_title')}
             </h1>
             <div className="mt-2 text-base text-chalk-dim">
@@ -129,6 +139,22 @@ export async function StudentDashboard(props: StudentDashboardProps) {
             <Link href="/dashboard/sessions" className={cn(s.btn, s.btnPrimary)}>{t('view_my_sessions')}</Link>
           </div>
         </div>
+        {teacherRequest?.status === 'pending'
+          ? (
+              <div className="mt-4 rounded-hand border border-chalk-yellow/40 bg-chalk-yellow/10 p-3 text-base text-chalk-yellow">
+                {t('teacher_request_pending')}
+              </div>
+            )
+          : null}
+        {teacherRequest?.status === 'rejected'
+          ? (
+              <div className="mt-4 rounded-hand border border-chalk-pink/40 bg-chalk-pink/10 p-3 text-base text-chalk-pink">
+                {t('teacher_request_rejected')}
+                {' '}
+                <Link href="/dashboard/user-profile" className="underline underline-offset-4">{t('teacher_request_open_profile')}</Link>
+              </div>
+            )
+          : null}
       </Card>
 
       {/* KPI Cards */}

@@ -2,11 +2,15 @@ import { NextResponse } from 'next/server';
 import { requireSessionAccess, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { attemptResult } from '@/server/scoring';
+import { computeSessionFlags } from '@/server/suspicionData';
 
 type SnapshotWithOptions = {
   id: string;
   type: 'mcq_single' | 'mcq_multi';
   prompt: string;
+  imageUrl: string | null;
+  imageAlt: string | null;
   options: Array<{ order: number; content: string; isCorrect: boolean }>;
 };
 
@@ -34,6 +38,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
         sessionId: true,
         status: true,
         score: true,
+        correctCount: true,
+        totalQuestions: true,
         attemptStartedAt: true,
         submittedAt: true,
         failedCount: true,
@@ -62,7 +68,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
       where: { attemptId },
       orderBy: { order: 'asc' },
       select: {
-        sessionQuestion: { select: { id: true, type: true, prompt: true, options: optionSelect } },
+        sessionQuestion: { select: { id: true, type: true, prompt: true, imageUrl: true, imageAlt: true, options: optionSelect } },
       },
     });
     const snapshots: SnapshotWithOptions[] = assigned.length > 0
@@ -70,10 +76,10 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
       : await prisma.sessionQuestionSnapshot.findMany({
           where: { sessionId },
           orderBy: { order: 'asc' },
-          select: { id: true, type: true, prompt: true, options: optionSelect },
+          select: { id: true, type: true, prompt: true, imageUrl: true, imageAlt: true, options: optionSelect },
         });
 
-    const [answers, checkpoints] = await Promise.all([
+    const [answers, checkpoints, events, flagsByAttempt] = await Promise.all([
       prisma.answer.findMany({
         where: { attemptId },
         select: { sessionQuestionId: true, selected: true },
@@ -83,6 +89,13 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
         orderBy: { createdAt: 'asc' },
         select: { type: true, ok: true, enteredToken: true, dueAt: true, createdAt: true },
       }),
+      // Hành vi khi làm bài (Task 5.4)
+      prisma.attemptEvent.findMany({
+        where: { attemptId },
+        orderBy: { at: 'asc' },
+        select: { id: true, type: true, at: true, durationMs: true },
+      }),
+      computeSessionFlags(sessionId),
     ]);
     const selectedByQ = new Map(answers.map(a => [a.sessionQuestionId, normalizeSelected(a.selected)]));
     const questionScores = (attempt.questionScores ?? {}) as Record<string, number>;
@@ -99,6 +112,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
         order: idx + 1,
         type: q.type,
         prompt: q.prompt,
+        imageUrl: q.imageUrl,
+        imageAlt: q.imageAlt,
         options: q.options.map(o => ({ ...o, selected: selected.includes(o.order) })),
         answered: selected.length > 0,
         isFullyCorrect,
@@ -116,6 +131,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
         status: attempt.status,
         score: attempt.score,
         maxScore: questions.length, // mỗi câu tối đa 1 điểm
+        ...attemptResult({ score: attempt.score, correctCount: attempt.correctCount, totalQuestions: attempt.totalQuestions ?? questions.length }),
         attemptStartedAt: attempt.attemptStartedAt,
         submittedAt: attempt.submittedAt,
         failedCount: attempt.failedCount,
@@ -131,6 +147,8 @@ export async function GET(_: Request, ctx: { params: Promise<{ sessionId: string
       scoring: { mode: scoringMode },
       questions,
       checkpoints,
+      events,
+      flags: flagsByAttempt.get(attemptId) ?? [],
     });
   } catch (error) {
     const authzResponse = handleAuthorizationError(error);

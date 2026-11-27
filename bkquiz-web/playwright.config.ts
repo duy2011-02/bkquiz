@@ -1,8 +1,11 @@
 import type { ChromaticConfig } from '@chromatic-com/playwright';
 import { defineConfig, devices } from '@playwright/test';
 
-// Use process.env.PORT by default and fallback to port 3000
-const PORT = process.env.PORT || 3000;
+// Cổng riêng cho e2e (mặc định 3300) — tránh dùng nhầm dev server ở cổng 3000 đang nối với database thật
+const PORT = process.env.E2E_PORT || 3300;
+
+// Database riêng cho e2e (Postgres Docker, xem docker-compose.yml). `prisma migrate deploy` tự tạo nếu chưa có.
+const E2E_DATABASE_URL = process.env.E2E_DATABASE_URL || 'postgresql://bkquiz:bkquiz@localhost:5433/bkquiz_e2e?schema=public';
 
 // Set webServer.url and use.baseURL with the location of the WebServer respecting the correct set port
 const baseURL = `http://localhost:${PORT}`;
@@ -26,14 +29,21 @@ export default defineConfig<ChromaticConfig>({
     timeout: 20 * 1000,
   },
 
-  // Run your local dev server before starting the tests:
-  // https://playwright.dev/docs/test-advanced#launching-a-development-web-server-during-the-tests
+  // Server cho e2e: migrate database e2e → build → next start (không dùng `next dev`: Next 16 chỉ cho
+  // 1 dev server mỗi thư mục, sẽ đụng dev server của người dùng). Đang có server ở E2E_PORT thì dùng lại.
   webServer: {
-    command: process.env.CI ? 'npx run-p db-server:memory start' : 'npx run-p db-server:memory dev:next',
-    url: baseURL,
-    timeout: 2 * 60 * 1000,
+    command: `npx prisma migrate deploy && npm run build:next && npx next start -p ${PORT}`,
+    url: `${baseURL}/api/health`,
+    timeout: 6 * 60 * 1000,
     reuseExistingServer: !process.env.CI,
     env: {
+      DATABASE_URL: E2E_DATABASE_URL,
+      // Đăng nhập theo vai trò qua /api/dev/role (không cần Google)
+      DEV_BYPASS_AUTH: '1',
+      // Rút ngắn khoảng giữa 2 checkpoint (chỉ có tác dụng khi DEV_BYPASS_AUTH=1)
+      BKQUIZ_CHECKPOINT_SECONDS: '10',
+      // Test chạy nhanh hơn người thật → không để rate limit làm test chập chờn
+      RATE_LIMIT_DISABLED: '1',
       NEXT_PUBLIC_SENTRY_DISABLED: 'true',
     },
   },
@@ -57,7 +67,8 @@ export default defineConfig<ChromaticConfig>({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      // PW_CHANNEL=chrome: dùng Chrome đã cài trên máy thay cho Chromium của Playwright (khỏi `npx playwright install`)
+      use: { ...devices['Desktop Chrome'], ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}) },
     },
     ...(process.env.CI
       ? [

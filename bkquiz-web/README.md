@@ -213,20 +213,44 @@ Xem `docs/uiux/guide/style.md` để biết chi tiết về design system.
 Tests được đặt cùng với source code, format `*.test.ts` hoặc `*.test.tsx`:
 
 ```bash
-npm run test
+npm run test                      # cả 2 project: unit (node) + ui (trình duyệt)
+npx vitest run --project unit     # chỉ test nghiệp vụ, không cần trình duyệt
 ```
+
+- `*.test.ts` trong `src/` chạy ở project **unit** (môi trường node). Test nghiệp vụ lõi nằm ở `src/server/`:
+  - `scoring.test.ts`: 3 chế độ chấm và đề biến thể.
+  - `checkpointPolicy.test.ts`: luật chờ/khoá khi nhập sai token và mốc checkpoint.
+  - `totp.test.ts`: token 45 giây, chấp nhận lệch ±1 bước.
+  - `attemptTimeLimit.test.ts`: thời gian làm bài, buffer, gia hạn.
+  - `authz.test.ts`: phân quyền, có mock Prisma.
+- `*.test.tsx` chạy ở project **ui** trong Chromium headless. Lần đầu cần cài trình duyệt bằng `npx playwright install chromium`, nếu không project này báo lỗi không khởi động được.
 
 ### E2E Tests
 
-Sử dụng Playwright, format `*.e2e.ts`:
+Sử dụng Playwright, format `*.e2e.ts`. Test luồng thi đầy đủ nằm ở `tests/e2e/ExamFlow.e2e.ts`. Luồng: giáo viên mở phiên, sinh viên làm bài, qua checkpoint (nhập sai 3 lần, giáo viên mở khoá, rồi nhập token đúng), nộp bài, cuối cùng giáo viên xem trang Theo dõi, Thống kê và chi tiết bài làm.
 
 ```bash
-# Cài đặt Playwright browsers (lần đầu)
-npx playwright install
+# Cần Postgres Docker đang chạy
+docker compose up -d
 
-# Chạy E2E tests
+# Chạy test luồng thi bằng Chrome đã cài trên máy
+PW_CHANNEL=chrome npm run test:e2e:exam
+
+# Hoặc tải Chromium của Playwright (lần đầu) rồi chạy toàn bộ E2E
+npx playwright install chromium
 npm run test:e2e
 ```
+
+Playwright tự dựng một server riêng trước khi chạy test:
+- Cổng **3300** (đổi bằng `E2E_PORT`).
+- Database riêng **`bkquiz_e2e`** (đổi bằng `E2E_DATABASE_URL`). Lệnh `prisma migrate deploy` tự tạo database này, nên test không đụng database `bkquiz`.
+- Trình tự dựng: migrate, rồi build, rồi `next start`.
+- Biến môi trường của server test:
+  - `DEV_BYPASS_AUTH=1`: đăng nhập theo vai trò.
+  - `BKQUIZ_CHECKPOINT_SECONDS=10`: checkpoint mỗi 10 giây. Biến này chỉ có tác dụng khi `DEV_BYPASS_AUTH=1`.
+  - `RATE_LIMIT_DISABLED=1`.
+
+Lần đầu chạy mất khoảng 2 phút vì phải build. Nếu cổng 3300 đang có server thì Playwright dùng lại server đó.
 
 ## 🚢 Deployment
 
@@ -237,15 +261,20 @@ npm run build
 npm run start
 ```
 
-### Environment Variables cho Production
+### Deploy staging (Vercel + Supabase)
 
-Đảm bảo set các biến môi trường sau trong hosting provider:
+Làm theo [`docs/DEPLOYMENT_SUPABASE.md`](../docs/DEPLOYMENT_SUPABASE.md), viết cho người chưa có tài khoản. Tóm tắt:
 
-- `DATABASE_URL`
-- `NEXTAUTH_URL`
-- `NEXTAUTH_SECRET`
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
-- Các biến khác tùy theo tính năng sử dụng
+- **Biến cần đặt trên Vercel:**
+  - `DATABASE_URL`: Supabase Transaction pooler, cổng 6543, kèm `?pgbouncer=true&connection_limit=1`.
+  - `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET`.
+  - `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_PUBLIC_BASE_URL` (Supabase Storage, ảnh câu hỏi).
+  - `NEXT_PUBLIC_SENTRY_DISABLED=true` nếu chưa dùng Sentry.
+- **Không đặt** `DEV_BYPASS_AUTH`, `BKQUIZ_CHECKPOINT_SECONDS`, `RATE_LIMIT_DISABLED` trên production.
+- **Migrate:** chạy `npx prisma migrate deploy` từ máy mình bằng chuỗi Session pooler (cổng 5432) trước mỗi lần deploy có migration mới.
+- **Cron:** `vercel.json` có cron hằng ngày gọi `/api/sessions/auto`. Trong buổi kiểm tra, màn chiếu đang mở sẽ lo việc tự bắt đầu / kết thúc phiên đúng giờ.
+
+Danh sách biến đầy đủ có chú thích nằm ở `.env.example`.
 
 ## 🔧 Troubleshooting
 
@@ -258,6 +287,22 @@ npm run db:studio
 # Reset database (dev only)
 npm run prisma:migrate reset
 ```
+
+### Trang tự tải lại liên tục khi chạy `npm run dev`
+
+Nếu console trình duyệt lặp lại "[Fast Refresh] rebuilding" và trang tự tải lại nhiều lần mỗi giây dù không sửa file nào, thì cache `.next` đã hỏng. Lỗi này thường xảy ra khi:
+- một dev server bị tắt ngang nhưng tiến trình con vẫn chạy;
+- `next build` chạy trong lúc `next dev` đang chạy.
+
+Cách sửa:
+
+```bash
+# Tắt mọi dev server của dự án, rồi:
+npm run clean   # xoá .next
+npm run dev
+```
+
+Không chạy `npm run build` / `npm run test:e2e` khi `npm run dev` đang chạy, vì cả hai cùng ghi vào thư mục `.next`.
 
 ### Type Errors
 

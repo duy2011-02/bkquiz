@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser } from '@/server/authz';
-import { prisma } from '@/server/prisma';
 import { requirePoolPermission } from '@/server/poolAuthz';
+import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 import { parseTagsInput, upsertTags, validateTagsCount } from '@/server/tags';
 
 const UpdateTagsSchema = z.object({
@@ -38,6 +39,10 @@ export async function GET(_: Request, ctx: { params: Promise<{ poolId: string }>
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ poolId: string }> }) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   const { poolId } = await ctx.params;
   const body = UpdateTagsSchema.parse(await req.json());
 

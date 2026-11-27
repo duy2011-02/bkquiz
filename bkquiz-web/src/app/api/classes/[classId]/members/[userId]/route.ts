@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireClassroomOwnership, requireUser } from '@/server/authz';
 import { handleAuthorizationError } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 /**
  * Xoá thành viên khỏi lớp.
@@ -12,6 +13,10 @@ import { prisma } from '@/server/prisma';
 export async function DELETE(req: Request, ctx: { params: Promise<{ classId: string; userId: string }> }) {
   try {
     const { userId } = await requireUser();
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
     const { classId, userId: targetParam } = await ctx.params;
     const targetUserId = targetParam === 'me' ? userId : targetParam;
     const ban = new URL(req.url).searchParams.get('ban') === '1';

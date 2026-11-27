@@ -78,14 +78,14 @@ export function Lobby(props: { sessionId: string }) {
       const res = await fetch(`/api/sessions/${props.sessionId}/join`, { method: 'POST' });
       if (!res.ok) {
         const text = await res.text();
-        let json: { attemptId?: string; error?: string };
+        let json: { attemptId?: string; error?: string; retryAfterSeconds?: number };
         try {
           json = JSON.parse(text);
         } catch {
           setError(`JOIN_FAILED: ${res.status} ${res.statusText}`);
           return;
         }
-        setError(json.error ?? 'JOIN_FAILED');
+        setError(json.error === 'RATE_LIMITED' ? t('rate_limited', { seconds: json.retryAfterSeconds ?? 60 }) : (json.error ?? 'JOIN_FAILED'));
         return;
       }
       const text = await res.text();
@@ -155,7 +155,7 @@ export function Lobby(props: { sessionId: string }) {
   if (error) {
     return (
       <ChalkRoom lockViewport ledge={backLink}>
-        <h1 className={cn(s.title, s.script, s.chalk)}>{t('cannot_access_session')}</h1>
+        <h1 className={cn(s.title, s.chalk)}>{t('cannot_access_session')}</h1>
         <div className={cn(s.note, s.pink, 'self-start')} role="alert">{error}</div>
       </ChalkRoom>
     );
@@ -171,7 +171,7 @@ export function Lobby(props: { sessionId: string }) {
     );
   }
 
-  const noteHeading = cn(s.script, 'text-[1.8rem] leading-tight font-bold');
+  const noteHeading = cn(s.heading, 'text-[1.8rem] leading-tight');
 
   return (
     <ChalkRoom lockViewport ledge={backLink}>
@@ -191,7 +191,7 @@ export function Lobby(props: { sessionId: string }) {
       {/* Session header */}
       <header className={s.header}>
         <div className="min-w-0 flex-1">
-          <h1 className={cn(s.title, s.script, s.chalk)}>{data.sessionName || data.quiz.title}</h1>
+          <h1 className={cn(s.title, s.chalk)}>{data.sessionName || data.quiz.title}</h1>
           <div className={cn(s.meta, s.dim, 'mt-1')}>
             <span>
               {t('class')}
@@ -303,6 +303,12 @@ export function Lobby(props: { sessionId: string }) {
                   </Button>
                 </>
               )}
+        {data.status !== 'ended'
+          ? (
+              // Minh bạch với sinh viên: những gì được ghi nhận khi làm bài (Task 5.4)
+              <p className={cn(s.inputHint, 'text-center')}>{t('proctor_notice')}</p>
+            )
+          : null}
       </section>
     </ChalkRoom>
   );

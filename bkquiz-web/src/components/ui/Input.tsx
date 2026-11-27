@@ -28,7 +28,7 @@ Select.displayName = 'Select';
 export function FieldLabel(props: React.LabelHTMLAttributes<HTMLLabelElement>) {
   const { className, ...rest } = props;
   // eslint-disable-next-line jsx-a11y/label-has-associated-control
-  return <label className={cn(s.inputLabel, 'font-chalk', className)} {...rest} />;
+  return <label className={cn(s.inputLabel, className)} {...rest} />;
 }
 
 /** Hint under a field (.inputHint). */

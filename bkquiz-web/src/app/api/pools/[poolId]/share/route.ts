@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireUser } from '@/server/authz';
 import { requirePoolPermission } from '@/server/poolAuthz';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 
 const ShareSchema = z.object({
   email: z.string().trim().email(),
@@ -34,6 +35,10 @@ export async function GET(_: Request, ctx: { params: Promise<{ poolId: string }>
 
 export async function POST(req: Request, ctx: { params: Promise<{ poolId: string }> }) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   const { poolId } = await ctx.params;
   const body = ShareSchema.parse(await req.json());
 
@@ -67,6 +72,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ poolId: string
 
 export async function DELETE(req: Request, ctx: { params: Promise<{ poolId: string }> }) {
   const { userId } = await requireUser();
+  const limited = await enforceRateLimit('write', `user:${userId}`);
+  if (limited) {
+    return limited;
+  }
   const { poolId } = await ctx.params;
   const body = UnshareSchema.parse(await req.json());
 

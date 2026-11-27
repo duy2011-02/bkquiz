@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireTeacher, requireUser } from '@/server/authz';
+import { checkAuthz } from '@/server/authzHelpers';
 import { prisma } from '@/server/prisma';
+import { enforceRateLimit } from '@/server/rateLimit';
 import { normalizeTagName } from '@/utils/tags';
 
 const CreateQuizSchema = z.object({
@@ -11,7 +13,10 @@ const CreateQuizSchema = z.object({
 
 export async function GET(req: Request) {
   const { userId, devRole } = await requireUser();
-  await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
+  const roleDenied = await checkAuthz(() => requireTeacher(userId, devRole as 'teacher' | 'student' | undefined));
+  if (roleDenied) {
+    return roleDenied;
+  }
 
   const url = new URL(req.url);
   const tagsParam = url.searchParams.get('tags');
@@ -22,7 +27,7 @@ export async function GET(req: Request) {
     : [];
 
   // Build base where clause
-  let whereClause: any = {
+  const whereClause: any = {
     createdByTeacherId: userId,
   };
 
@@ -94,14 +99,14 @@ export async function GET(req: Request) {
   });
 
   return NextResponse.json({
-    quizzes: quizzes.map(q => {
+    quizzes: quizzes.map((q) => {
       const settings = (q.settings ?? {}) as any;
       return {
-      id: q.id,
-      title: q.title,
-      status: q.status,
-      updatedAt: q.updatedAt,
-      ruleCount: q._count.rules,
+        id: q.id,
+        title: q.title,
+        status: q.status,
+        updatedAt: q.updatedAt,
+        ruleCount: q._count.rules,
         durationSeconds: typeof settings.durationSeconds === 'number' ? settings.durationSeconds : null,
         tags: q.tags.map((t: any) => t.tag),
       };
@@ -112,7 +117,14 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { userId, devRole } = await requireUser();
-    await requireTeacher(userId, devRole as 'teacher' | 'student' | undefined);
+    const limited = await enforceRateLimit('write', `user:${userId}`);
+    if (limited) {
+      return limited;
+    }
+    const roleDenied = await checkAuthz(() => requireTeacher(userId, devRole as 'teacher' | 'student' | undefined));
+    if (roleDenied) {
+      return roleDenied;
+    }
     const body = CreateQuizSchema.parse(await req.json());
 
     const quiz = await prisma.quiz.create({

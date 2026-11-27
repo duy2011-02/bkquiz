@@ -1,5 +1,7 @@
 # Role-Based Components Architecture Analysis
 
+> **Ghi chú (27/11/2026):** tài liệu phân tích cũ, giữ làm lịch sử. Vai trò trợ giảng (TA) nhắc tới ở đây đã bị gỡ ở Đợt 7; quyền hiện hành xem [`docs/security.md`](../security.md) mục 3.1b–3.1c.
+
 ## 🔍 Current State
 
 ### Pattern 1: Separate Components (Dashboard)
